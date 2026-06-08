@@ -1,0 +1,17 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "promper",
+  "description": "Prompt-engineering toolkit for Claude Code: engineer role-grounded prompts via invokerai routing, and certify agents against the prompt-engineering standard.",
+  "owner": {
+    "name": "Jamin Echols",
+    "url": "https://github.com/justjammin"
+  },
+  "plugins": [
+    {
+      "name": "promper",
+      "description": "/promper engineers role-grounded prompts (role inherited from the invokerai-selected agent). /prim certifies agents against the prompt-engineering standard.",
+      "source": "./",
+      "category": "productivity"
+    }
+  ]
+}
