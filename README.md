@@ -1,16 +1,20 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/promper-stacked-light.svg">
+    <img alt="Promper — prim & proper prompts all the time" src="assets/promper-stacked.svg" width="300">
+  </picture>
+</p>
+
 # promper
 
-A prompt-engineering toolkit for Claude Code. Two commands:
+Promper is a prompt-engineering toolkit for Claude Code. It ships two commands:
 
-- **`/promper <intent>`** — engineers a clean, **role-grounded** prompt from a rough request.
-- **`/prim`** — certifies your agents against the prompt-engineering standard ("seal of approval").
+- **`/promper <intent>`**: turns a rough request into a clean, **role-grounded** prompt.
+- **`/prim`**: grades your agents against the prompt-engineering standard and hands out the "seal of approval".
 
 ## The idea
 
-invokerai routes every task — solo or multi-domain — to the proper specialist agent. Those
-agents *are* prompt engineering: each one's system prompt is a tuned persona for its domain. So
-the right `<role>` for a prompt is the agent invokerai would pick — not a guessed "you are an
-expert…".
+Here's the bet. invokerai already routes every task, solo or multi-domain, to the right specialist agent. And those agents *are* prompt engineering: each one's system prompt is a persona tuned for its domain. So the best `<role>` for your prompt isn't something you guess ("you are an expert…"). It's the agent invokerai would have picked anyway. promper just borrows it.
 
 ```
 raw intent
@@ -21,8 +25,7 @@ raw intent
   → engineered prompt(s)
 ```
 
-**Division of labor:** promper *makes* · invokerai *routes* · the agents *are* the roles · prim
-*guards* (certifies the agents the roles come from).
+**Who does what:** promper *makes* the prompt · invokerai *routes* to the agent · the agents *are* the roles · prim *guards* them (it certifies the agents those roles come from).
 
 ## /promper
 
@@ -30,13 +33,20 @@ raw intent
 /promper write a tweet announcing my budgeting app
 ```
 
-- **Portable (default):** returns a standalone, copy-paste prompt with the persona inlined.
-- **`--run`:** engineers, then spawns the selected agent(s) and executes (invokerai + a prompt-polish pass).
-- `--agent=<name>` override · `--target=portable|costar` · `--deep` (hand the whole job to the Prompt Engineer agent).
+- **Portable (default):** you get a standalone, copy-paste prompt with the persona baked in. Take it anywhere.
+- **`--run`:** promper engineers the prompt, then spawns the selected agent(s) and runs it (invokerai plus a prompt-polish pass).
+- Flags: `--agent=<name>` to override the pick · `--target=portable|costar` · `--deep` to hand the whole job to the Prompt Engineer agent.
 
-Default skeleton is Claude-native XML; `--target=costar` emits CO-STAR for portable/non-Claude prompts.
+The default skeleton is Claude-native XML. Pass `--target=costar` to emit CO-STAR for portable or non-Claude prompts.
 
 ## /prim
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/promper-seal-icon-bowtie-light.svg">
+    <img alt="prim seal" src="assets/promper-seal-icon-bowtie.svg" width="84">
+  </picture>
+</p>
 
 ```
 /prim                # pick agents to evaluate
@@ -44,13 +54,9 @@ Default skeleton is Claude-native XML; `--target=costar` emits CO-STAR for porta
 /prim my-writer --fix
 ```
 
-Scores each approved agent 0–100 against the rubric, lists P0/P1/P2 findings with fixes, and
-records a seal (`score ≥ 80 AND zero P0`) to `~/.claude/agents/.prim-seal.json`. `--fix` rewrites
-failing agents — gated with per-file diffs and confirmation, and it never silently edits
-plugin-provided agents (those revert on `/plugin update`; it offers an override copy instead).
+prim scores each approved agent 0–100 against the rubric, lists P0/P1/P2 findings with fixes, and writes a seal (`score ≥ 80 AND zero P0`) to `~/.claude/agents/.prim-seal.json`. Add `--fix` and it rewrites the agents that fail. That part is gated: you see a per-file diff and confirm each one. It also won't silently edit plugin-provided agents (those revert on `/plugin update`), so it offers you an override copy instead.
 
-promper reads the prim ledger and warns when it's about to inherit a role from an uncertified or
-weak agent.
+promper reads the prim ledger, so when it's about to inherit a role from an uncertified or weak agent, it warns you first.
 
 ## Layout
 
@@ -66,16 +72,19 @@ promper/
 
 ## Install / use
 
-For immediate local use, the two skills are symlinked into `~/.claude/skills/` so `/promper` and
-`/prim` resolve directly (restart Claude Code to register new commands). The repo is the single
-source of truth — the symlinks point back at `skills/promper` and `skills/prim`, so there is no
-second copy to drift.
+Quickest path, one command:
 
-> Requires **invokerai** installed (`~/.claude/skills/invokerai/`) with a built agent map at
-> `~/.invoker/agent-map.json`. The `<role>` inheritance depends on it.
+```
+npx @ninjamin/promper
+```
 
-> **Note:** `promper` is permitted to invoke invokerai (an explicit exception to the usual "skills
-> don't call invokerai" rule), because driving invokerai's routing to inherit roles is its core function.
+That copies the `promper` and `prim` skills into `~/.claude/skills/`. Restart Claude Code and `/promper` and `/prim` resolve.
+
+**Local dev:** the two skills are symlinked into `~/.claude/skills/`, so the commands resolve directly while you hack on them (restart Claude Code to pick up new commands). The repo stays the single source of truth: the symlinks point back at `skills/promper` and `skills/prim`, so there's no second copy to drift.
+
+> Needs [invokerai](https://github.com/justjammin/invokerai) installed (`~/.claude/skills/invokerai/`) with a built agent map at `~/.invoker/agent-map.json`. The `<role>` inheritance depends on it.
+
+> **Heads up:** promper is allowed to call [invokerai](https://github.com/justjammin/invokerai) directly. That's a deliberate exception to the usual "skills don't call invokerai" rule, because driving invokerai's routing to inherit roles is the whole point.
 
 ## License
 

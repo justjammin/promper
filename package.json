@@ -1,0 +1,40 @@
+{
+  "name": "@ninjamin/promper",
+  "version": "0.1.0",
+  "publishConfig": {
+    "access": "public"
+  },
+  "description": "Prompt-engineering toolkit for Claude Code. /promper engineers role-grounded prompts (role inherited from the invokerai-selected agent); /prim certifies your agents against the prompt-engineering standard.",
+  "bin": {
+    "promper": "bin/promper.mjs"
+  },
+  "files": [
+    "bin/",
+    "skills/",
+    "reference/",
+    ".claude-plugin/",
+    "README.md",
+    "assets/"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "prompt-engineering",
+    "invokerai",
+    "agents",
+    "prompt",
+    "orchestration",
+    "claude-code"
+  ],
+  "author": {
+    "name": "Jamin Echols",
+    "url": "https://github.com/justjammin"
+  },
+  "homepage": "https://github.com/justjammin/promper",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/justjammin/promper.git"
+  },
+  "license": "Apache-2.0"
+}
