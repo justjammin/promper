@@ -14,7 +14,7 @@ Promper is a prompt-engineering toolkit for Claude Code. It ships two commands:
 
 ## The idea
 
-Here's the bet. invokerai already routes every task, solo or multi-domain, to the right specialist agent. And those agents *are* prompt engineering: each one's system prompt is a persona tuned for its domain. So the best `<role>` for your prompt isn't something you guess ("you are an expert…"). It's the agent invokerai would have picked anyway. promper just borrows it.
+Part of prompt engineering is the role but what's the best role for the job? I made [invokerai](https://github.com/justjammin/invokerai) for figuring that part out. But you still need the other 10 steps for a good prompt. So the best `<role>` for your prompt isn't something you guess ("you are an expert…"). It's the agent invokerai would have picked anyway. promper just borrows it.
 
 ```
 raw intent
