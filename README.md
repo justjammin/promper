@@ -53,53 +53,42 @@ promper-setup-runner --keep-invoker   # install alongside invokerai's hook inste
 promper-setup-runner --uninstall      # remove promper's hook
 ```
 
-How it works: on each submission Claude Code hands the hook the prompt on stdin. The hook
-(`hooks/prompt-submit.mjs`, copied to `~/.claude/promper/`) injects an `additionalContext`
-directive telling Claude to treat the message as a raw intent and run `/promper <intent> --run`
-— decompose via invokerai, inherit the proper agent's role, engineer the prompt, then spawn that
-agent and execute. The `--run` flag is injected for you.
+### How the hook routes (one dispatcher, many passes)
 
-The hook passes a prompt through untouched when routing would loop or isn't wanted: it's already
-a `/slash-command`, it's empty, or it carries the `--raw` opt-out marker. Each install backs up
-the existing settings file and is idempotent (re-running won't duplicate the hook).
-
-> A `UserPromptSubmit` hook can add context or block — it can't literally rewrite your message
-> into another command. So the runner steers the model toward the `--run` flow via injected
-> context rather than substituting the command outright.
-
-## Stdio runner (rewrite the prompt, then run it)
-
-When you want to **actually rewrite the prompt** before it reaches the model — not just inject
-context — use `promper-run`. It's a standalone wrapper that owns the whole pipeline and calls the
-Anthropic API directly:
+On each submission the prompt arrives on the hook's stdin. The hook (`hooks/prompt-submit.mjs`) is a
+**dispatcher**: it detects which AI tool the prompt came from and routes to that tool's pass, emitting
+output *of the same nature* as that source.
 
 ```
-raw intent (stdin / argv)
-  → route via invokerai (~/.invoker/agent-map.json) → inherit the proper agent's role
-  → engineer the prompt body around that role          (pass 1: Prompt Engineer model call)
-  → REWRITE the prompt that goes downstream
-  → run the engineered prompt against the model        (pass 2: the injected --run pass)
-→ result (stdout)
+prompt on stdin
+  → detect source  (PROMPER_SOURCE env → Claude hook signature → tool dir in cwd → default)
+  → Claude          → ADD CONTEXT   (additionalContext steering into /promper … --run)
+  → .codex/.cursor… → REWRITE        (replace the prompt with the engineered run directive)
+  → unknown         → default rewrite
 ```
 
+Why two kinds of pass: a Claude Code `UserPromptSubmit` hook can only *add context*, so the Claude
+pass injects an `additionalContext` directive (decompose via invokerai, inherit the role, engineer,
+run). Tools like Codex and Cursor consume a prompt directly, so their passes **rewrite** the prompt
+into a self-contained engineered run directive (the promper skill may not be installed there).
+
+Layout — add a tool by dropping in one file:
+
 ```
-promper-run "write a tweet announcing my budgeting app"   # engineer + run, result to stdout
-echo "write a tweet ..." | promper-run                    # reads intent from stdin
-promper-run --prompt-only "..."     # emit the rewritten prompt and stop (pure stdio rewrite)
-promper-run --dry-run "..."         # routing + skeleton scaffold, no API call
-promper-run --agent=content-marketer "..."   # force the role source
-promper-run --target=costar "..."   # CO-STAR skeleton instead of Claude-native XML
-promper-run --model=claude-opus-4-8 --effort=high "..."
+hooks/
+  prompt-submit.mjs   dispatcher: detect source, route, emit in that source's shape
+  lib/route.mjs       shared promper logic (skip rules, context directive, rewrite directive)
+  sources/claude.mjs  additive-context pass
+  sources/codex.mjs   direct-rewrite pass
+  sources/cursor.mjs  direct-rewrite pass
+  sources/default.mjs generic direct-rewrite pass
 ```
 
-Routing is deterministic (best-match of the intent against each agent's description in the invokerai
-agent map); the role is inherited from the picked agent and used as the model's system prompt for the
-run. The routing header and progress go to **stderr**, so **stdout** stays a clean prompt/result pipe
-you can redirect or chain. Needs `ANTHROPIC_API_KEY` in the environment; `--dry-run` needs no key.
-
-This is the true "edit the stdio" path — distinct from the hook above, which can only add context. A
-`UserPromptSubmit` hook can't substitute the prompt; this runner can, because it sits in front of the
-model call instead of inside Claude Code's hook system.
+Every pass honors the same skip rules — a prompt passes through untouched (Claude: no context;
+rewrite tools: echoed unchanged) when it's already a `/slash-command`, is empty, or carries the
+`--raw` opt-out. The dispatcher never blocks a submission: any failure exits 0. Source detection can
+be forced with `PROMPER_SOURCE=<name>`. The setup runner copies the whole `hooks/` tree to
+`~/.claude/promper/hooks/`, backs up your settings, and is idempotent.
 
 ## /prim
 
@@ -127,10 +116,11 @@ promper/
   .claude-plugin/      plugin.json + marketplace.json
   bin/
     promper.mjs        installer: copies the skills into ~/.claude/skills/
-    setup-runner.mjs   installer: wires the UserPromptSubmit hook (auto --run)
-    run.mjs            stdio runner: rewrite the prompt + run it via the API
+    setup-runner.mjs   installer: wires the prompt-submit hook (auto --run)
   hooks/
-    prompt-submit.mjs  the UserPromptSubmit hook that injects /promper … --run
+    prompt-submit.mjs  dispatcher: routes the prompt to a per-source pass
+    lib/route.mjs      shared routing logic (skip rules + directives)
+    sources/           per-tool passes (claude, codex, cursor, default)
   skills/
     promper/SKILL.md   the "make" skill
     prim/SKILL.md      the "evaluate / certify" skill

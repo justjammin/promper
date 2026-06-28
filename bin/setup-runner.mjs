@@ -4,8 +4,8 @@
 // invokerai prompt-submit hook so promper owns the routing.
 //
 // What it does:
-//   1. Copies hooks/prompt-submit.mjs to a stable path (~/.claude/promper/ by default)
-//      so settings can point at an absolute, update-safe location.
+//   1. Copies the hooks/ tree (dispatcher + lib/ + sources/) to a stable path
+//      (~/.claude/promper/hooks/) so settings can point at an absolute location.
 //   2. Reads the target settings.json (user-wide by default, or project with --project),
 //      backing it up first.
 //   3. Strips any existing invokerai prompt-submit hook (command referencing "invoker")
@@ -39,10 +39,12 @@ const settingsPath = PROJECT
   ? join(process.cwd(), ".claude", "settings.json")
   : join(home, ".claude", "settings.json");
 
-// Stable home for the hook script so settings can reference an absolute path.
+// Stable home for the hook tree so settings can reference an absolute path. The hook is a
+// dispatcher that imports sibling modules (lib/, sources/), so we copy the whole tree.
 const hookHome = join(home, ".claude", "promper");
-const hookDest = join(hookHome, "prompt-submit.mjs");
-const hookCommand = `node ${hookDest}`;
+const hookDir = join(hookHome, "hooks");
+const hookEntry = join(hookDir, "prompt-submit.mjs");
+const hookCommand = `node ${hookEntry}`;
 
 async function exists(p) {
   try {
@@ -123,9 +125,9 @@ async function main() {
     return;
   }
 
-  // Install the hook script to its stable home.
+  // Install the hook tree to its stable home (dispatcher + lib/ + sources/).
   await mkdir(hookHome, { recursive: true });
-  await copyFile(join(root, "hooks", "prompt-submit.mjs"), hookDest);
+  await cp(join(root, "hooks"), hookDir, { recursive: true, force: true });
 
   next.push(makeBlock());
   settings.hooks.UserPromptSubmit = next;
@@ -135,7 +137,7 @@ async function main() {
 
   await writeFile(settingsPath, JSON.stringify(settings, null, 2) + "\n");
 
-  console.log(`  installed  hook script  →  ${hookDest}`);
+  console.log(`  installed  hook tree   →  ${hookDir}`);
   console.log(`  wired      UserPromptSubmit  →  ${settingsPath}`);
   if (stripped) console.log(`  replaced   ${stripped} existing prompt-submit hook(s)`);
   if (bak) console.log(`  backup     ${bak}`);
