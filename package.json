@@ -7,7 +7,8 @@
   "description": "Prompt-engineering toolkit for Claude Code. /promper engineers role-grounded prompts (role inherited from the invokerai-selected agent); /prim certifies your agents against the prompt-engineering standard.",
   "bin": {
     "promper": "bin/promper.mjs",
-    "promper-setup-runner": "bin/setup-runner.mjs"
+    "promper-setup-runner": "bin/setup-runner.mjs",
+    "promper-run": "bin/run.mjs"
   },
   "files": [
     "bin/",
@@ -18,6 +19,9 @@
     "README.md",
     "assets/"
   ],
+  "dependencies": {
+    "@anthropic-ai/sdk": ">=0.88.0"
+  },
   "engines": {
     "node": ">=18"
   },

@@ -67,6 +67,40 @@ the existing settings file and is idempotent (re-running won't duplicate the hoo
 > into another command. So the runner steers the model toward the `--run` flow via injected
 > context rather than substituting the command outright.
 
+## Stdio runner (rewrite the prompt, then run it)
+
+When you want to **actually rewrite the prompt** before it reaches the model — not just inject
+context — use `promper-run`. It's a standalone wrapper that owns the whole pipeline and calls the
+Anthropic API directly:
+
+```
+raw intent (stdin / argv)
+  → route via invokerai (~/.invoker/agent-map.json) → inherit the proper agent's role
+  → engineer the prompt body around that role          (pass 1: Prompt Engineer model call)
+  → REWRITE the prompt that goes downstream
+  → run the engineered prompt against the model        (pass 2: the injected --run pass)
+→ result (stdout)
+```
+
+```
+promper-run "write a tweet announcing my budgeting app"   # engineer + run, result to stdout
+echo "write a tweet ..." | promper-run                    # reads intent from stdin
+promper-run --prompt-only "..."     # emit the rewritten prompt and stop (pure stdio rewrite)
+promper-run --dry-run "..."         # routing + skeleton scaffold, no API call
+promper-run --agent=content-marketer "..."   # force the role source
+promper-run --target=costar "..."   # CO-STAR skeleton instead of Claude-native XML
+promper-run --model=claude-opus-4-8 --effort=high "..."
+```
+
+Routing is deterministic (best-match of the intent against each agent's description in the invokerai
+agent map); the role is inherited from the picked agent and used as the model's system prompt for the
+run. The routing header and progress go to **stderr**, so **stdout** stays a clean prompt/result pipe
+you can redirect or chain. Needs `ANTHROPIC_API_KEY` in the environment; `--dry-run` needs no key.
+
+This is the true "edit the stdio" path — distinct from the hook above, which can only add context. A
+`UserPromptSubmit` hook can't substitute the prompt; this runner can, because it sits in front of the
+model call instead of inside Claude Code's hook system.
+
 ## /prim
 
 <p align="center">
@@ -94,6 +128,7 @@ promper/
   bin/
     promper.mjs        installer: copies the skills into ~/.claude/skills/
     setup-runner.mjs   installer: wires the UserPromptSubmit hook (auto --run)
+    run.mjs            stdio runner: rewrite the prompt + run it via the API
   hooks/
     prompt-submit.mjs  the UserPromptSubmit hook that injects /promper … --run
   skills/
