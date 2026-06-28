@@ -39,6 +39,34 @@ raw intent
 
 The default skeleton is Claude-native XML. Pass `--target=costar` to emit CO-STAR for portable or non-Claude prompts.
 
+## Setup runner (auto-route every prompt through `--run`)
+
+`promper-setup-runner` installs a Claude Code **`UserPromptSubmit` hook** so you don't have to
+type `/promper … --run` each time — every bare prompt is routed through promper's run flow, and
+any **invokerai prompt-submit hook is replaced** so promper owns the routing.
+
+```
+npx @ninjamin/promper                 # install the skills first
+promper-setup-runner                  # wire the hook into ~/.claude/settings.json
+promper-setup-runner --project        # ...or into ./.claude/settings.json (this repo only)
+promper-setup-runner --keep-invoker   # install alongside invokerai's hook instead of replacing it
+promper-setup-runner --uninstall      # remove promper's hook
+```
+
+How it works: on each submission Claude Code hands the hook the prompt on stdin. The hook
+(`hooks/prompt-submit.mjs`, copied to `~/.claude/promper/`) injects an `additionalContext`
+directive telling Claude to treat the message as a raw intent and run `/promper <intent> --run`
+— decompose via invokerai, inherit the proper agent's role, engineer the prompt, then spawn that
+agent and execute. The `--run` flag is injected for you.
+
+The hook passes a prompt through untouched when routing would loop or isn't wanted: it's already
+a `/slash-command`, it's empty, or it carries the `--raw` opt-out marker. Each install backs up
+the existing settings file and is idempotent (re-running won't duplicate the hook).
+
+> A `UserPromptSubmit` hook can add context or block — it can't literally rewrite your message
+> into another command. So the runner steers the model toward the `--run` flow via injected
+> context rather than substituting the command outright.
+
 ## /prim
 
 <p align="center">
@@ -63,6 +91,11 @@ promper reads the prim ledger, so when it's about to inherit a role from an unce
 ```
 promper/
   .claude-plugin/      plugin.json + marketplace.json
+  bin/
+    promper.mjs        installer: copies the skills into ~/.claude/skills/
+    setup-runner.mjs   installer: wires the UserPromptSubmit hook (auto --run)
+  hooks/
+    prompt-submit.mjs  the UserPromptSubmit hook that injects /promper … --run
   skills/
     promper/SKILL.md   the "make" skill
     prim/SKILL.md      the "evaluate / certify" skill
