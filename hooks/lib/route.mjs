@@ -1,12 +1,9 @@
 // Shared promper-routing logic used by every source pass.
 //
-// A "route" turns a bare user prompt into a promper `--run` directive. Two framings:
-//   - contextDirective(intent): ADDITIVE — for tools whose prompt hook can only add context
-//     (Claude Code). The original prompt stays; this is appended as guidance.
-//   - rewritePrompt(intent): REPLACEMENT — for tools whose prompt mechanism takes the rewritten
-//     prompt directly (.codex/.cursor/etc). The original prompt is replaced by this.
-//
-// Both honor the same skip rules so routing never loops or fights an explicit opt-out.
+// This module owns the skip rules and the REPLACEMENT framing (rewritePrompt) used by direct-rewrite
+// tools. The ADDITIVE framing — the context appended for Claude — is not here: it's assembled by
+// lib/context.mjs from drop-in contributors under hooks/context/, so "adding context" is its own
+// pluggable concern rather than a string baked into the hook. See hooks/context/run-directive.mjs.
 
 export const OPT_OUT = "--raw";
 
@@ -27,26 +24,6 @@ export function shouldRoute(prompt) {
   if (t.startsWith("/")) return false; // already a slash-command / skill invocation
   if (t.includes(OPT_OUT)) return false; // explicit one-off bypass
   return true;
-}
-
-// ADDITIVE context (Claude): the skill exists, so point at it directly.
-export function contextDirective(intent) {
-  return [
-    "Routing directive from the promper prompt-submit hook (`promper run` mode is active):",
-    "",
-    "Treat the user's message above as a raw INTENT to be engineered and executed, not as a",
-    "question to answer directly. Run the promper skill in run mode on it:",
-    "",
-    "  /promper " + intent + " --run",
-    "",
-    "Route the intent through invokerai (decompose + spawn-selection) to discover the proper agent,",
-    "inherit that agent's persona as the <role>, engineer the rest of the prompt, then spawn the",
-    "selected agent(s) and execute — returning the result of the run, not just the prompt. The `--run`",
-    "flag is injected by the hook. If the message is itself a request to *engineer a prompt* rather",
-    "than to act, fall back to promper's normal intent guard.",
-    "",
-    "To bypass this routing for a single message, append `" + OPT_OUT + "` to the prompt.",
-  ].join("\n");
 }
 
 // REPLACEMENT prompt (non-Claude): self-contained, since the promper skill may not be installed.

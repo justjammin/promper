@@ -110,7 +110,7 @@ async function main() {
   const prompt = await getPrompt(payload);
   const pass = await loadPass(source);
 
-  const result = pass.handle({ prompt, payload, cwd, source });
+  const result = await pass.handle({ prompt, payload, cwd, source });
   emit(result, prompt);
 }
 

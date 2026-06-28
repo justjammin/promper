@@ -1,12 +1,16 @@
 // Claude Code pass — ADDITIVE.
-// A UserPromptSubmit hook can only add context or block; it cannot rewrite the prompt.
-// So we emit additionalContext steering the turn into the `/promper … --run` flow.
+// A UserPromptSubmit hook can only add context or block; it cannot rewrite the prompt. So we ask
+// the context builder (lib/context.mjs) for the additionalContext, assembled from the contributors
+// under hooks/context/ — the hook doesn't carry the text itself.
 
-import { shouldRoute, contextDirective } from "../lib/route.mjs";
+import { shouldRoute } from "../lib/route.mjs";
+import { buildContext } from "../lib/context.mjs";
 
 export const name = "claude";
 
-export function handle({ prompt }) {
-  if (!shouldRoute(prompt)) return { mode: "noop" };
-  return { mode: "context", text: contextDirective(prompt.trim()) };
+export async function handle(ctx) {
+  if (!shouldRoute(ctx.prompt)) return { mode: "noop" };
+  const text = await buildContext({ ...ctx, intent: ctx.prompt.trim() });
+  if (!text) return { mode: "noop" }; // no contributor produced context → pass through
+  return { mode: "context", text };
 }

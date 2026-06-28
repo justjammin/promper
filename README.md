@@ -72,16 +72,24 @@ pass injects an `additionalContext` directive (decompose via invokerai, inherit 
 run). Tools like Codex and Cursor consume a prompt directly, so their passes **rewrite** the prompt
 into a self-contained engineered run directive (the promper skill may not be installed there).
 
-Layout — add a tool by dropping in one file:
+The additive context isn't hardcoded in the hook — it's assembled by `lib/context.mjs` from drop-in
+**contributors** under `hooks/context/`. Each contributor is a `.mjs` file exporting
+`contribute({ intent, prompt, payload, cwd, source })` (returns the text to add, or nothing) and an
+optional `order` (lower runs first). The builder runs them all, drops empties, and joins with blank
+lines; a contributor that throws is skipped. Add context the same way you add a tool — drop in a file.
+
+Layout — add a tool or a piece of context by dropping in one file:
 
 ```
 hooks/
-  prompt-submit.mjs   dispatcher: detect source, route, emit in that source's shape
-  lib/route.mjs       shared promper logic (skip rules, context directive, rewrite directive)
-  sources/claude.mjs  additive-context pass
-  sources/codex.mjs   direct-rewrite pass
-  sources/cursor.mjs  direct-rewrite pass
-  sources/default.mjs generic direct-rewrite pass
+  prompt-submit.mjs       dispatcher: detect source, route, emit in that source's shape
+  lib/route.mjs           skip rules + rewrite directive (replacement framing)
+  lib/context.mjs         context builder: assembles additionalContext from contributors
+  context/run-directive.mjs  the core /promper … --run directive (additive context)
+  sources/claude.mjs      additive-context pass (asks the context builder)
+  sources/codex.mjs       direct-rewrite pass
+  sources/cursor.mjs      direct-rewrite pass
+  sources/default.mjs     generic direct-rewrite pass
 ```
 
 Every pass honors the same skip rules — a prompt passes through untouched (Claude: no context;
@@ -119,7 +127,9 @@ promper/
     setup-runner.mjs   installer: wires the prompt-submit hook (auto --run)
   hooks/
     prompt-submit.mjs  dispatcher: routes the prompt to a per-source pass
-    lib/route.mjs      shared routing logic (skip rules + directives)
+    lib/route.mjs      skip rules + rewrite directive
+    lib/context.mjs    context builder (assembles additive context)
+    context/           additive-context contributors (drop-in .mjs files)
     sources/           per-tool passes (claude, codex, cursor, default)
   skills/
     promper/SKILL.md   the "make" skill
