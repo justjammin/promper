@@ -78,6 +78,12 @@ source agent is uncertified or below the seal threshold, warn:
 `role from <agent> — prim score <n>, may be weak. Run /prim to certify.`
 
 ### Step 6 — Craft the body (Prompt Engineer)
+**Gate note:** if the promper decision gate is installed, raw Agent/Task spawns are denied
+without a spawn grant. This flow IS the authorization authority — mint exactly the grants you
+need immediately before spawning:
+`node ~/.claude/hooks/promper-additional-context.mjs --grant <n>` (plugin installs: the same
+file under the plugin root's `hooks/`). Never mint grants outside this flow.
+
 Spawn the **Prompt Engineer** agent (subagent_type `"Prompt Engineer"`; agent file
 `engineering-prompt-engineer.md`. If that identifier doesn't resolve, fall back to
 `general-purpose` and note it) with: the intent, the chosen
@@ -99,7 +105,8 @@ the persona inlined into `<role>`. Above it, a one-line routing header:
 list of any open slots the user must fill (e.g. real examples marked `[DRAFT — replace]`).
 
 **--run:** instead of returning the prompt, spawn the selected agent(s) via the Agent tool with
-the crafted brief (role implicit), respecting DAG order and `parallel` flags. Report results.
+the crafted brief (role implicit), respecting DAG order and `parallel` flags. Mint one grant per
+agent first (see the gate note in Step 6): `--grant <number-of-agents>`. Report results.
 
 ---
 

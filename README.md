@@ -67,7 +67,7 @@ promper/
     promper/SKILL.md   the "make" skill
     prim/SKILL.md      the "evaluate / certify" skill
   hooks/
-    additional-context.mjs   deterministic advisory hook (see below)
+    additional-context.mjs   deterministic decision-gate hook (see below)
     hooks.json               plugin-install hook registration
   reference/
     pe-principles.md   shared source of truth (11 principles, XML skeleton, rubric)
@@ -89,24 +89,34 @@ That copies the `promper` and `prim` skills into `~/.claude/skills/`. Restart Cl
 
 > **Heads up:** promper is allowed to call [invokerai](https://github.com/justjammin/invokerai) directly. That's a deliberate exception to the usual "skills don't call invokerai" rule, because driving invokerai's routing to inherit roles is the whole point.
 
-## The additionalContext hook (optional)
+## The decision gate
 
-Earlier invokerai builds injected routing context with shell hooks: escaped-JSON `echo` strings in `settings.json` and a bash script that hard-denied raw `Agent` calls. Those were fragile (quoting), coercive (`permissionDecision: deny`), fired on every prompt, and now point at MCP tools that no longer exist.
+Earlier invokerai builds tried this with shell hooks: escaped-JSON `echo` strings in `settings.json` and a bash token gate with a 30-second TTL. The intent was right; the mechanics weren't (quoting bugs, a deny that exited 1 so it never actually denied, a token race, and nudges toward MCP tools that no longer exist).
 
-promper ships the palatable replacement: [`hooks/additional-context.mjs`](hooks/additional-context.mjs), a single deterministic Node file.
+promper ships the real version: [`hooks/additional-context.mjs`](hooks/additional-context.mjs), a single deterministic Node file.
 
 ```
 npx @ninjamin/promper --hook
 ```
 
-What it does, and deliberately does not do:
+The stance: **every question and coding decision gets proper prompt engineering.** Three events, one file:
 
-- **Deterministic.** Pure function of the hook event + `~/.invoker/agent-map.json` + the prim ledger. Same inputs → byte-identical output. No timestamps, no shell quoting, output built with `JSON.stringify`.
-- **Advisory only.** Emits `additionalContext` — a compact digest of the agent map (domains, counts) and prim seal status. It never emits `permissionDecision` and never blocks a tool call.
-- **Quiet.** `SessionStart` injects the digest once per session (skipped on resume). `UserPromptSubmit` injects only when the prompt is actually about routing or prompt engineering; every other turn produces zero output.
-- **Fails open.** Missing agent map, corrupt JSON, or unexpected stdin → exit 0, no output (a missing map yields a one-line pointer to `/invokerai:setup`).
+- **`UserPromptSubmit`** — injects the mandate on *every* prompt: apply `pe-principles.md` (objective, structure, constraints, output format, stated assumptions) before answering or deciding.
+- **`SessionStart`** — the mandate plus the routing digest: agent-map domains/counts and prim seal status (skipped on resume).
+- **`PreToolUse` on `Agent`/`Task` — the hard gate.** Raw spawns are **denied** unless a spawn grant exists. Grants are minted by the `/promper` flow itself, immediately before spawning — so the only path to a subagent runs through routing + role inheritance + an engineered brief. The deny reason tells the model exactly how to comply.
 
-Installing via the Claude Code plugin gets the hook automatically (`hooks/hooks.json` uses `${CLAUDE_PLUGIN_ROOT}`). To uninstall the npx version, remove the two entries referencing `promper-additional-context.mjs` from `~/.claude/settings.json` and delete `~/.claude/hooks/promper-additional-context.mjs`.
+Grant mechanics (what makes it deterministic where the old gate wasn't):
+
+- Grants are one-shot files in `~/.promper/grants/`, consumed by atomic `unlink` — no TTL clock, no read-modify-write race, and N parallel spawns consume exactly N grants.
+- `node ~/.claude/hooks/promper-additional-context.mjs --grant <n>` mints, `--revoke` clears, `--status` shows mode + outstanding grants.
+- Denies exit 0 with proper `hookSpecificOutput` JSON, which is the only form Claude Code enforces.
+- Output is a pure function of (event, agent map, prim ledger, grants, config) — byte-identical given the same inputs.
+
+Dial it down without uninstalling via `~/.promper/config.json`: `{"gate": "hard"}` (default), `"advisory"` (context only, no denies), or `"off"`.
+
+This is a workflow gate, not a security boundary — it forces the engineering step into the loop; it doesn't defend against something determined to bypass it.
+
+Installing via the Claude Code plugin gets the gate automatically (`hooks/hooks.json` uses `${CLAUDE_PLUGIN_ROOT}`). To uninstall the npx version, remove the three entries referencing `promper-additional-context.mjs` from `~/.claude/settings.json` and delete `~/.claude/hooks/promper-additional-context.mjs`.
 
 ## License
 

@@ -3,9 +3,10 @@
 // npx runs from a throwaway cache, so we COPY (not symlink, which the repo uses for local dev).
 //
 // Flags:
-//   --hook   also install the advisory additionalContext hook (deterministic JS,
-//            SessionStart + UserPromptSubmit) into ~/.claude/hooks/ and register
-//            it in ~/.claude/settings.json (idempotent).
+//   --hook   also install the promper decision-gate hook (deterministic JS:
+//            SessionStart + UserPromptSubmit context, PreToolUse hard gate on
+//            Agent/Task spawns) into ~/.claude/hooks/ and register it in
+//            ~/.claude/settings.json (idempotent).
 
 import { cp, mkdir, access, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -62,13 +63,18 @@ async function installHook() {
   const hooks = (settings.hooks ??= {});
   let changed = false;
 
-  for (const eventName of ["SessionStart", "UserPromptSubmit"]) {
+  const events = [
+    ["SessionStart", {}],
+    ["UserPromptSubmit", {}],
+    ["PreToolUse", { matcher: "^(Agent|Task)$" }],
+  ];
+  for (const [eventName, extra] of events) {
     const entries = (hooks[eventName] ??= []);
     const present = entries.some((e) =>
       (e.hooks ?? []).some((h) => (h.command ?? "").includes(HOOK_FILE))
     );
     if (!present) {
-      entries.push({ hooks: [{ type: "command", command }] });
+      entries.push({ ...extra, hooks: [{ type: "command", command }] });
       changed = true;
       console.log(`  registered ${eventName} hook → ${settingsPath}`);
     } else {
@@ -88,7 +94,7 @@ async function main() {
   if (args.has("--hook")) {
     await installHook();
   } else {
-    console.log("\n  Tip: re-run with --hook to install the advisory routing-context hook.");
+    console.log("\n  Tip: re-run with --hook to install the promper decision-gate hook.");
   }
 
   const agentMap = join(homedir(), ".invoker", "agent-map.json");
