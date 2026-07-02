@@ -20,7 +20,7 @@ needs every principle (e.g. a trivial classification prompt may not need chain-o
    is trained on: `<role>`, `<context>`, `<instructions>`, `<examples>`, `<constraints>`,
    `<output_format>`, `<thinking>`. Reduces instruction/data bleed.
 5. **Role / persona.** A specific expert role sharpens expertise and tone. (In this toolkit the
-   role is *inherited* from the invokerai-selected agent — see Role-Inheritance Contract below.)
+   role is *inherited* from the routed specialist agent — see Role-Inheritance Contract below.)
 6. **Explicit output format.** Describe the format AND show a sample. Prefill or specify the
    exact shape (JSON keys, sections, length) rather than hoping.
 7. **Give the "why".** State the motivation/goal. Aligned intent → better-aligned output.
@@ -29,7 +29,7 @@ needs every principle (e.g. a trivial classification prompt may not need chain-o
 9. **Long-context ordering.** Put large documents/data near the TOP; put the actual ask at the
    BOTTOM. Ask the model to ground answers in quotes from the source.
 10. **Chain, don't cram.** Split a fat, multi-stage task into linked subprompts rather than one
-    overloaded prompt. (Falls out naturally from a multi-node invokerai DAG: one prompt per node.)
+    overloaded prompt. (Falls out naturally from a multi-node bead_graph: one prompt per node.)
 11. **Treat as testable.** A prompt is a draft against success criteria, not a one-shot. Note
     what would need an eval / test case to verify.
 
@@ -41,7 +41,7 @@ The default structure `promper` emits. Omit tags that don't apply; never emit em
 
 ```
 <role>
-{Inherited from the invokerai-selected agent's persona. Specific expertise + stance.}
+{Inherited from the routed agent's persona. Specific expertise + stance.}
 </role>
 
 <context>
@@ -94,19 +94,25 @@ Work through the problem step by step before answering.
 ## Role-Inheritance Contract
 
 The architecture's keystone. The `<role>` is **never invented** — it is inherited from the
-agent that invokerai would route the task to.
+specialist agent the task routes to. promper performs the routing itself, inline:
 
-1. Run invokerai's decompose + spawn-selection flow (read `~/.invoker/agent-map.json`, build a
-   `bead_graph`, select the best-match `agent` per node by matching the node's `action` to each
-   candidate agent's `description`). Equivalent to invoking `/invokerai:decompose` then
-   `/invokerai:spawn`.
-2. For each node's selected `agent`, read its persona from `~/.invoker/agent-map.json` (the
-   `description` field; for high fidelity, read the agent's own `.md`). That persona IS the `<role>`.
-3. Multi-node DAG ⇒ one engineered prompt per node, chained (Principle 10), each with its node's role.
-4. **Portable mode:** inline the persona text into `<role>` so the prompt stands alone.
+1. **Decompose inline.** Build a `bead_graph` ({id, domain, action, deps, parallel, agent});
+   most intents are one node. No tickets or `bd` commands by default (opt-in when the user
+   tracks work in beads).
+2. **Discover the role-source agent, cheapest source first:** (a) the in-session agent list
+   already in context, when actually visible; (b) else the lean map pieces —
+   `~/.invoker/map/index.json` then the matching `<domain>.json`, entries walked piecewise;
+   (c) else size-gated jq slices of the legacy `~/.invoker/agent-map.json`; (d) else suggest
+   `/promper:setup` and use a generic expert role, noting the gap. Never read any map file
+   whole. Selection at every tier: the agent whose description best matches the node's `action`.
+3. **Inherit the persona:** the agent's own `.md` body when readable (high fidelity), else its
+   `description` string. That persona IS the `<role>`.
+4. Multi-node graph ⇒ one engineered prompt per node, chained (Principle 10), each with its node's role.
+5. **Portable mode:** inline the persona text into `<role>` so the prompt stands alone.
    **Run mode:** the role is implicit (the agent already carries its system prompt), so `<role>`
-   stays thin and the prompt is a crisp task brief handed to that agent.
-5. Always surface the routing decision to the user: `invokerai picked <agent> → role = <summary>`.
+   stays thin and the prompt is a crisp task brief handed to that agent. Execution placement
+   (inline vs subagent) is a per-node token decision — see promper Step 7.5.
+6. Always surface the routing decision: `routed → <agent> (via <source>) → role = <summary>`.
 
 ---
 

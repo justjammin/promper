@@ -7,7 +7,7 @@ import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
-const SKILLS = ["promper", "prim"];
+const SKILLS = ["promper", "promper-setup", "prim"];
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const dest = join(homedir(), ".claude", "skills");
 
@@ -25,12 +25,13 @@ async function main() {
     console.log(`  installed  ${name}  →  ${to}`);
   }
 
-  const agentMap = join(homedir(), ".invoker", "agent-map.json");
-  if (!(await exists(agentMap))) {
+  const mapIndex = join(homedir(), ".invoker", "map", "index.json");
+  const legacyMap = join(homedir(), ".invoker", "agent-map.json");
+  if (!(await exists(mapIndex)) && !(await exists(legacyMap))) {
     console.warn(
-      "\n  ⚠  invokerai agent map not found at ~/.invoker/agent-map.json.\n" +
-      "     promper inherits its <role> from invokerai. Install invokerai and run\n" +
-      "     its setup (https://github.com/justjammin/invokerai) before using /promper."
+      "\n  ℹ  no routing map found (~/.invoker/map/ or ~/.invoker/agent-map.json).\n" +
+      "     /promper will route from the in-session agent list when available.\n" +
+      "     Run /promper:setup to build the lean map for reliable role inheritance."
     );
   }
 

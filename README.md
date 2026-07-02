@@ -14,18 +14,19 @@ Promper is a prompt-engineering toolkit for Claude Code. It ships two commands:
 
 ## The idea
 
-Here's the bet. invokerai already routes every task, solo or multi-domain, to the right specialist agent. And those agents *are* prompt engineering: each one's system prompt is a persona tuned for its domain. So the best `<role>` for your prompt isn't something you guess ("you are an expert…"). It's the agent invokerai would have picked anyway. promper just borrows it.
+Here's the bet. Your installed agents *are* prompt engineering: each one's system prompt is a persona tuned for its domain. So the best `<role>` for your prompt isn't something you guess ("you are an expert…"). It's the specialist agent your task would route to. promper finds that agent itself — inline and token-lean — and borrows its persona.
 
 ```
 raw intent
-  → invokerai decompose + spawn   →  selects the proper agent(s)
-        → agent persona            ⇒  <role>   (inherited, not invented)
-  → Prompt Engineer agent fills the rest around that role
+  → promper decomposes inline       →  bead_graph (usually one node)
+  → walks the map, cheapest first   →  session list → index.json → <domain>.json
+        → agent persona             ⇒  <role>   (inherited, not invented)
+  → promper crafts the rest inline (Prompt Engineer agent on --deep)
         <context> <instructions> <examples> <constraints> <output_format>
-  → engineered prompt(s)
+  → engineered prompt(s) + plan     (nothing spawns until you say go)
 ```
 
-**Who does what:** promper *makes* the prompt · invokerai *routes* to the agent · the agents *are* the roles · prim *guards* them (it certifies the agents those roles come from).
+**Who does what:** promper *makes* the prompt, *routes* to the agent, and *decides execution* · the agents *are* the roles · prim *guards* them · invokerai (optional) remains for standalone BEADS-tracked orchestration.
 
 ## /promper
 
@@ -34,8 +35,8 @@ raw intent
 ```
 
 - **Portable (default):** you get a standalone, copy-paste prompt with the persona baked in. Take it anywhere.
-- **`--run`:** promper engineers the prompt, then spawns the selected agent(s) and runs it (invokerai plus a prompt-polish pass).
-- Flags: `--agent=<name>` to override the pick · `--target=portable|costar` · `--deep` to hand the whole job to the Prompt Engineer agent.
+- **`--run`:** promper engineers the prompt(s), presents the plan, then executes — each node runs inline or as a spawned subagent based on a per-node token decision.
+- Flags: `--agent=<name>` to override the pick · `--target=portable|costar` · `--deep` to spawn the Prompt Engineer agent for heavy drafting (default crafting is inline).
 
 The default skeleton is Claude-native XML. Pass `--target=costar` to emit CO-STAR for portable or non-Claude prompts.
 
@@ -65,6 +66,7 @@ promper/
   .claude-plugin/      plugin.json + marketplace.json
   skills/
     promper/SKILL.md   the "make" skill
+    promper-setup/SKILL.md   builds the lean routing map (~/.invoker/map/)
     prim/SKILL.md      the "evaluate / certify" skill
   reference/
     pe-principles.md   shared source of truth (11 principles, XML skeleton, rubric)
@@ -78,13 +80,17 @@ Quickest path, one command:
 npx @ninjamin/promper
 ```
 
-That copies the `promper` and `prim` skills into `~/.claude/skills/`. Restart Claude Code and `/promper` and `/prim` resolve.
+That copies the `promper`, `promper-setup`, and `prim` skills into `~/.claude/skills/`. Restart Claude Code and `/promper` and `/prim` resolve.
 
 **Local dev:** the two skills are symlinked into `~/.claude/skills/`, so the commands resolve directly while you hack on them (restart Claude Code to pick up new commands). The repo stays the single source of truth: the symlinks point back at `skills/promper` and `skills/prim`, so there's no second copy to drift.
 
-> Needs [invokerai](https://github.com/justjammin/invokerai) installed (`~/.claude/skills/invokerai/`) with a built agent map at `~/.invoker/agent-map.json`. The `<role>` inheritance depends on it.
-
-> **Heads up:** promper is allowed to call [invokerai](https://github.com/justjammin/invokerai) directly. That's a deliberate exception to the usual "skills don't call invokerai" rule, because driving invokerai's routing to inherit roles is the whole point.
+> **invokerai is optional.** promper routes itself: it picks the role-source agent from the
+> in-session agent list when visible, else from the lean map pieces at `~/.invoker/map/`
+> (built by `/promper:setup`, or converted one-shot from a legacy invokerai
+> `agent-map.json`). No list and no map → generic expert role plus a setup suggestion.
+> promper's internal node shape ({id, domain, action, deps, parallel, agent}) matches
+> invokerai's bead_graph, so a promper plan still hands off cleanly to `/invokerai:spawn`
+> if you want full BEADS-tracked orchestration.
 
 ## License
 

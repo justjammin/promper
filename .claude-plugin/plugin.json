@@ -1,6 +1,6 @@
 {
   "name": "promper",
-  "description": "Prompt-engineering toolkit. /promper engineers role-grounded prompts (role inherited from the invokerai-selected agent); /prim certifies your agents against the prompt-engineering standard.",
+  "description": "Prompt-engineering toolkit. /promper engineers role-grounded prompts (role inherited from the routed specialist agent); /prim certifies your agents against the prompt-engineering standard.",
   "author": {
     "name": "Jamin Echols",
     "url": "https://github.com/justjammin"
