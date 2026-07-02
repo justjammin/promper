@@ -139,6 +139,11 @@ results are ~60% smaller.
 
 Report format: `node-1 → inline (light)` · `node-2 → subagent backend-developer (noisy, parallel)`.
 
+Record the decision at `~/.invoker/state/promper-decision.json` —
+`{"verdict":"inline"|"agent"|"mixed","repo":"<repo root>","reason":"<one line>","ts":<epoch ms>}`.
+The edit gate honors it: verdict `inline`/`mixed` unlocks direct edits in the repo (60-min TTL);
+verdict `agent` means the work must go to the spawned specialist.
+
 ### Step 8 — Output
 **Portable (default):** present each engineered prompt in a fenced block, copy-paste ready, with
 the persona inlined into `<role>`. Above it, a one-line routing header:
