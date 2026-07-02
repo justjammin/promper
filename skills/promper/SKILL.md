@@ -62,8 +62,15 @@ enough, skip this step — speed matters.
 
 **4a. Decompose.** Build the `bead_graph` inline — nodes
 `{id, domain, action, deps, parallel, agent}`. Most intents are ONE node; do not manufacture a
-DAG. No tickets, no epic, no `pattern` label by default. `bd` tickets are opt-in: create them
-only when the user tracks work in beads, one ticket per node, no prune churn.
+DAG. No tickets, no epic, no `pattern` label by default.
+
+**Bead lifecycle (opt-in):** when the user tracks work in beads (`bd` on PATH and they ask, or
+the session already uses beads), run the full lifecycle: optional epic for multi-node graphs
+(`bd create "Task: <task>" --epic --json`), one child ticket per node
+(`bd create "Step <id>: <action>" --parent <epic> --depends <deps> --json`), mark running at
+execution start (`bd update <id> --status running`), close on completion
+(`bd close <id> --reason "Completed by <agent>"`), note on failure, and prune the whole batch
+at run end (`bd delete <id>`) so the store stays bounded. Every bd failure is non-blocking.
 
 **4b. Route each node.** Discover the role-source agent yourself. Never load an invokerai
 skill; never read any map file whole. Work down the tiers; stop at the first that yields
@@ -143,6 +150,10 @@ Record the decision at `~/.invoker/state/promper-decision.json` —
 `{"verdict":"inline"|"agent"|"mixed","repo":"<repo root>","reason":"<one line>","ts":<epoch ms>}`.
 The edit gate honors it: verdict `inline`/`mixed` unlocks direct edits in the repo (60-min TTL);
 verdict `agent` means the work must go to the spawned specialist.
+
+When beads are on (Step 4a), execution drives the ticket lifecycle: mark the node's ticket
+running at start, close it with the executing agent's name on completion, prune the batch when
+the run ends.
 
 ### Step 8 — Output
 **Portable (default):** present each engineered prompt in a fenced block, copy-paste ready, with

@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // `npx promper` — copies the promper + prim skills into ~/.claude/skills/.
 // npx runs from a throwaway cache, so we COPY (not symlink, which the repo uses for local dev).
+// `promper scan [--dir <path>] [--check] [--legacy] [--out <path>]` — build the
+// lean routing map at ~/.invoker/map/ deterministically (see dist/scan.js).
 
 import { cp, mkdir, access } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -38,7 +40,22 @@ async function main() {
   console.log("\n  Done. Restart Claude Code, then run /promper or /prim.\n");
 }
 
-main().catch((err) => {
-  console.error(`\n  promper install failed: ${err.message}\n`);
+async function run() {
+  const argv = process.argv.slice(2);
+  if (argv[0] === "scan") {
+    let mod;
+    try {
+      mod = await import("../dist/scan.js");
+    } catch (err) {
+      throw new Error(`could not load dist/scan.js (${err.message}); run \`npm run build\` first`);
+    }
+    await mod.runScan(argv.slice(1));
+    return;
+  }
+  await main();
+}
+
+run().catch((err) => {
+  console.error(`\n  promper failed: ${err.message}\n`);
   process.exit(1);
 });

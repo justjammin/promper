@@ -66,8 +66,9 @@ promper/
   .claude-plugin/      plugin.json + marketplace.json
   skills/
     promper/SKILL.md   the "make" skill
-    promper-setup/SKILL.md   builds the lean routing map (~/.invoker/map/)
+    promper-setup/SKILL.md   builds the lean routing map (wraps `promper scan`)
     prim/SKILL.md      the "evaluate / certify" skill
+  src/                 the TypeScript scanner (`promper scan`) — deterministic, zero LLM
   reference/
     pe-principles.md   shared source of truth (11 principles, XML skeleton, rubric)
 ```
@@ -81,6 +82,25 @@ npx @ninjamin/promper
 ```
 
 That copies the `promper`, `promper-setup`, and `prim` skills into `~/.claude/skills/`. Restart Claude Code and `/promper` and `/prim` resolve.
+
+Then build the routing map (deterministic scan, no model tokens):
+
+```
+npx @ninjamin/promper scan
+```
+
+`promper scan` reads agent frontmatter from `~/.claude/agents`, `./.claude/agents`,
+`~/.codex/agents`, and `~/.gemini/agents`, classifies by name table + description keywords,
+and writes the lean pieces to `~/.invoker/map/` (tiny `index.json` + one small file per
+domain — routing never reads a large file). Idempotent: existing assignments are never
+moved. Flags: `--check` (dry run) · `--dir <path>` (extra dirs) · `--legacy` (also refresh
+an old invokerai `agent-map.json`) · `--out <path>`.
+
+**Positioning:** promper is built for frontier harnesses (Claude Code and friends). For
+custom harnesses — LangGraph, Flowise, bespoke agent loops — use
+[invoker](https://github.com/justjammin/invokerai) as an SDK routing node; it consumes the
+same `~/.invoker/map/` artifact and shares the bead_graph node shape and bead ticket
+lifecycle.
 
 **Local dev:** the two skills are symlinked into `~/.claude/skills/`, so the commands resolve directly while you hack on them (restart Claude Code to pick up new commands). The repo stays the single source of truth: the symlinks point back at `skills/promper` and `skills/prim`, so there's no second copy to drift.
 

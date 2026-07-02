@@ -1,19 +1,17 @@
 ---
 name: promper-setup
 description: >
-  Build promper's lean routing map from installed agents. Scans agent directories, extracts
-  frontmatter only (name, description, file), groups agents into domains, and writes split
-  map pieces to ~/.invoker/map/ (a tiny index plus one small file per domain) so routing
-  never reads a large file. Run once, or when agents change. Offers a one-shot conversion
-  from a legacy invokerai agent-map.json when present. Triggers on: "promper setup",
-  "rebuild the agent map", "refresh promper routing".
+  Build promper's lean routing map from installed agents. Wraps the deterministic TypeScript
+  scanner (`promper scan`) — zero LLM tokens for scanning and classification — then uses
+  judgment only to domain-assign the scanner's `unmapped` leftovers. Run once, or when agents
+  change. Triggers on: "promper setup", "rebuild the agent map", "refresh promper routing".
 ---
 
 # promper:setup — build the lean routing map
 
-Produces the map pieces `/promper` walks during role discovery. Design goal: **no large file
-ever needs to be read at routing time.** The index stays around 1–2KB; each domain piece is a
-few KB of `{name, description, file}` entries.
+Produces the map pieces `/promper` walks during role discovery. The scan itself is
+deterministic code, not model work — your only judgment call is placing the agents the
+keyword classifier could not.
 
 ---
 
@@ -26,23 +24,47 @@ few KB of `{name, description, file}` entries.
                             "model": "..." (only if declared) }, ... ]
 ```
 
-Rules for pieces:
-- **Frontmatter fields only**: `name`, `description`, `file` (basename of the source `.md`),
-  and `model` when the agent declares one.
-- **Never store `tools`** — routing never needs it, and tools strings are the single largest
-  source of map bloat.
+- Frontmatter fields only; **`tools` is never stored in pieces** (largest source of map bloat).
 - One file per domain so a routing pass reads only the piece it needs.
-
-The legacy invokerai map (`~/.invoker/agent-map.json`) is **left untouched** — `prim` and any
-invokerai flows still read it. promper's pieces are the canonical routing source.
+- The legacy `~/.invoker/agent-map.json` is left untouched (`prim` still reads it); refresh it
+  with `--legacy` when wanted.
 
 ---
 
 ## Flow
 
-### Step 1 — Fast path: convert a legacy map
-If `~/.invoker/agent-map.json` exists and `~/.invoker/map/index.json` does not, offer a
-one-shot conversion (no agent rescan needed):
+### Step 1 — Run the scanner (deterministic, zero LLM)
+
+```bash
+npx @ninjamin/promper scan
+# or, from a local checkout: node <repo>/bin/promper.mjs scan
+```
+
+Flags: `--check` dry run · `--dir <path>` extra agent dirs (repeatable) · `--legacy` also
+refresh the legacy agent-map.json · `--out <path>` alternate map dir.
+
+Default scan dirs: `~/.claude/agents`, `./.claude/agents`, `~/.codex/agents`,
+`~/.gemini/agents`. The scanner is idempotent and additive: existing domain assignments are
+authoritative (it never moves or renames), it classifies only new agents (name table →
+description keywords → `unmapped`), drops entries whose source `.md` vanished, and writes
+sorted, byte-stable files.
+
+### Step 2 — Relay the report
+Show the user: map path, domain and agent counts, new agents, dropped agents, unmapped list.
+
+### Step 3 — Place the unmapped (the only LLM step)
+For each agent in the `unmapped` piece: its description is already in the piece — pick the
+best-fitting existing domain from `index.json`, or a new domain only if genuinely distinct
+(keep the taxonomy ~15–40 domains; no per-agent singletons). Move the entry: append to the
+target `<domain>.json`, remove from `unmapped.json`, update both lists in `index.json`, keep
+everything sorted. Cost: ~60 tokens per unmapped agent.
+
+---
+
+## Fallback — scanner unavailable
+
+Node/npx missing but a legacy `~/.invoker/agent-map.json` exists → one-shot jq conversion
+(no rescan):
 
 ```bash
 mkdir -p ~/.invoker/map
@@ -55,33 +77,6 @@ for d in $(jq -r '.domains | keys[]' ~/.invoker/agent-map.json); do
 done
 ```
 
-Report the piece count and stop — done. Only continue to Step 2 for a fresh scan (no legacy
-map, or the user asks for a rescan).
-
-### Step 2 — Scan agent files
-Scan, in order: `~/.claude/agents/`, `./.claude/agents/`, plus any plugin agent directories
-you know are installed. For each `*.md`, read **frontmatter only** (do not read agent bodies):
-`name`, `description`, `model` if present. Record the basename as `file`.
-
-### Step 3 — Group into domains
-Group agents into a bounded domain taxonomy (~15–40 named domains). Singleton domains only
-for genuinely distinct fields; never one domain per agent. When pieces already exist, keep the
-existing domain assignments and bucket only the new/changed agents (idempotent + additive —
-never clobber hand-edits).
-
-### Step 4 — Write the pieces
-Write `index.json` and each `<domain>.json` per the artifact spec above. Then report:
-
-```
-promper map: ~/.invoker/map/ — <N> domains, <M> agents, index <K>B
-new since last run: <names or "none">
-unmapped (no description): <names or "none">
-```
-
----
-
 ## Edge cases
-- **No agents found anywhere:** say so; suggest installing agents before using role inheritance.
-- **Agent renamed/deleted:** on rescan, drop entries whose source file no longer exists; note them.
-- **Both legacy map and pieces exist:** pieces win for routing; offer to refresh pieces from a
-  rescan if the legacy map looks newer.
+- **No agents found anywhere:** say so; suggest installing agents before relying on role inheritance.
+- **Both legacy map and pieces exist:** pieces win for routing; `--legacy` re-syncs the old file.
