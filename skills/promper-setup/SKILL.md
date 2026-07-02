@@ -52,12 +52,18 @@ sorted, byte-stable files.
 ### Step 2 — Relay the report
 Show the user: map path, domain and agent counts, new agents, dropped agents, unmapped list.
 
-### Step 3 — Place the unmapped (the only LLM step)
+### Step 3 — Place the unmapped + fold stray domains (the only LLM step)
 For each agent in the `unmapped` piece: its description is already in the piece — pick the
 best-fitting existing domain from `index.json`, or a new domain only if genuinely distinct
 (keep the taxonomy ~15–40 domains; no per-agent singletons). Move the entry: append to the
 target `<domain>.json`, remove from `unmapped.json`, update both lists in `index.json`, keep
 everything sorted. Cost: ~60 tokens per unmapped agent.
+
+Also check the report for **new domains the scanner created this run**. The scanner
+auto-aliases ported-taxonomy names into the existing taxonomy when exactly one match exists
+(`backend` → `engineering-backend`); a genuinely new or ambiguous domain still lands under
+its classifier name. If it duplicates an existing domain in meaning, fold it in the same way:
+move the entries, delete the stray piece, update `index.json`.
 
 ---
 

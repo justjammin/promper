@@ -225,6 +225,25 @@ function makeEntry(scanned) {
         entry.model = scanned.model;
     return entry;
 }
+/**
+ * Fold a ported-taxonomy domain into the existing map's taxonomy.
+ * A map built by other means (e.g. an LLM taxonomy) may use richer names like
+ * "engineering-backend" where the ported classifier says "backend"; without
+ * this, every recognizable new agent would create a stray sibling domain.
+ * Aliases only when exactly ONE existing domain matches: exact name, or the
+ * ported name as a hyphen-bounded segment (backend -> engineering-backend,
+ * ml -> engineering-ai-ml, testing -> testing-qa). Ambiguous or no match ->
+ * keep the classifier's domain.
+ */
+function resolveDomainAlias(domain, existingDomains) {
+    if (domain === "unmapped" || existingDomains.length === 0)
+        return domain;
+    if (existingDomains.includes(domain))
+        return domain;
+    const matches = existingDomains.filter((d) => d.startsWith(`${domain}-`) || d.endsWith(`-${domain}`) || d.includes(`-${domain}-`));
+    const only = matches[0];
+    return matches.length === 1 && only !== undefined ? only : domain;
+}
 function merge(scanned, existing) {
     const buckets = new Map();
     const newAgents = [];
@@ -258,7 +277,8 @@ function merge(scanned, existing) {
             noDescription.push(name); // skipped from map, reported as unmapped
             continue;
         }
-        const { domain } = (0, classify_js_1.classify)(name, source.description);
+        const { domain: classified } = (0, classify_js_1.classify)(name, source.description);
+        const domain = resolveDomainAlias(classified, existing?.domains ?? []);
         push(domain, makeEntry(source));
         newAgents.push({ name, domain });
     }
