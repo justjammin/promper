@@ -16,8 +16,10 @@ Turns a rough human request into a well-engineered, **role-grounded** prompt. Th
 invented — it is inherited from the agent invokerai would route the task to. promper *makes*;
 `prim` *guards*; invokerai *routes*; the agents *are* the roles.
 
-**Read first:** `~/Documents/GitHub/promper/reference/pe-principles.md` (the 11 principles, the
-Claude-XML skeleton, and the Role-Inheritance Contract). All behavior below depends on it.
+**Read first:** `reference/pe-principles.md`, resolved relative to this skill's directory
+(`~/.claude/skills/promper/reference/pe-principles.md` for installed copies;
+`../../reference/pe-principles.md` from a repo or plugin checkout). It holds the 11 principles,
+the Claude-XML skeleton, and the Role-Inheritance Contract. All behavior below depends on it.
 
 > **CLAUDE.md carve-out:** promper is explicitly permitted to invoke `/invokerai:decompose` and
 > `/invokerai:spawn`. Driving invokerai's routing to inherit agent roles IS promper's function.

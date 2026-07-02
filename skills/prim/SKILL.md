@@ -15,8 +15,10 @@ description: >
 well-engineered prompts. A sloppy agent → a sloppy inherited `<role>`. prim is the QA layer for
 the role source: promper *makes*, prim *guards*.
 
-**Read first:** `~/Documents/GitHub/promper/reference/pe-principles.md` — the 11 principles, the
-scoring rubric, severity definitions, and seal threshold. Score strictly against it.
+**Read first:** `reference/pe-principles.md`, resolved relative to this skill's directory
+(`~/.claude/skills/prim/reference/pe-principles.md` for installed copies;
+`../../reference/pe-principles.md` from a repo or plugin checkout). It holds the 11 principles,
+the scoring rubric, severity definitions, and seal threshold. Score strictly against it.
 
 ---
 

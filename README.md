@@ -66,6 +66,9 @@ promper/
   skills/
     promper/SKILL.md   the "make" skill
     prim/SKILL.md      the "evaluate / certify" skill
+  hooks/
+    additional-context.mjs   deterministic advisory hook (see below)
+    hooks.json               plugin-install hook registration
   reference/
     pe-principles.md   shared source of truth (11 principles, XML skeleton, rubric)
 ```
@@ -85,6 +88,25 @@ That copies the `promper` and `prim` skills into `~/.claude/skills/`. Restart Cl
 > Needs [invokerai](https://github.com/justjammin/invokerai) installed (`~/.claude/skills/invokerai/`) with a built agent map at `~/.invoker/agent-map.json`. The `<role>` inheritance depends on it.
 
 > **Heads up:** promper is allowed to call [invokerai](https://github.com/justjammin/invokerai) directly. That's a deliberate exception to the usual "skills don't call invokerai" rule, because driving invokerai's routing to inherit roles is the whole point.
+
+## The additionalContext hook (optional)
+
+Earlier invokerai builds injected routing context with shell hooks: escaped-JSON `echo` strings in `settings.json` and a bash script that hard-denied raw `Agent` calls. Those were fragile (quoting), coercive (`permissionDecision: deny`), fired on every prompt, and now point at MCP tools that no longer exist.
+
+promper ships the palatable replacement: [`hooks/additional-context.mjs`](hooks/additional-context.mjs), a single deterministic Node file.
+
+```
+npx @ninjamin/promper --hook
+```
+
+What it does, and deliberately does not do:
+
+- **Deterministic.** Pure function of the hook event + `~/.invoker/agent-map.json` + the prim ledger. Same inputs → byte-identical output. No timestamps, no shell quoting, output built with `JSON.stringify`.
+- **Advisory only.** Emits `additionalContext` — a compact digest of the agent map (domains, counts) and prim seal status. It never emits `permissionDecision` and never blocks a tool call.
+- **Quiet.** `SessionStart` injects the digest once per session (skipped on resume). `UserPromptSubmit` injects only when the prompt is actually about routing or prompt engineering; every other turn produces zero output.
+- **Fails open.** Missing agent map, corrupt JSON, or unexpected stdin → exit 0, no output (a missing map yields a one-line pointer to `/invokerai:setup`).
+
+Installing via the Claude Code plugin gets the hook automatically (`hooks/hooks.json` uses `${CLAUDE_PLUGIN_ROOT}`). To uninstall the npx version, remove the two entries referencing `promper-additional-context.mjs` from `~/.claude/settings.json` and delete `~/.claude/hooks/promper-additional-context.mjs`.
 
 ## License
 
