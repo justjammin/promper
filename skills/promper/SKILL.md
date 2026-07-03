@@ -105,6 +105,9 @@ For each node's selected agent, fetch its persona — first hit wins:
    no file reads) and fold them into the role — portable prompts get one line,
    `This role carries the <plugin> toolkit — skills: <names>; commands: <names>`; `--run`
    spawns include the same list in the brief so the agent reaches for its own skills.
+   Mechanical shortcut for spawn briefs: `promper hydrate <agent> "<task>"` emits the
+   persona + toolkit + task as one spawn-ready prompt (`--json` for programmatic use) —
+   spawn it via a `general-purpose` subagent; no plugin install needed.
 2. Local agent: `~/.claude/agents/<file>` from the piece, else `~/.claude/agents/<name>.md`,
    then `./.claude/agents/<name>.md`.
 3. Fallback: the description string already in hand (session list or map piece) — zero extra reads.

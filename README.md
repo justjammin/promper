@@ -109,6 +109,20 @@ Map entries record each agent's owning plugin; when promper inherits a role it a
 the plugin's toolkit — the engineered prompt (or spawned brief) names the plugin's skills and
 commands so the role arrives with its equipment, not just its persona.
 
+No plugin installation required — installed plugins cost ambient context in every session,
+so promper *hydrates* instead:
+
+```
+promper hydrate fastapi-pro "Build a secure OAuth2 routing system with JWT verification."
+```
+
+`hydrate` resolves the agent through the map (exact name or file stem — `fastapi-pro` finds
+`api-scaffolding-fastapi-pro`), falls back to a recursive marketplace walk, strips the
+frontmatter, folds in the plugin's toolkit, and emits one spawn-ready prompt. Flags:
+`--json` (structured output for programmatic spawning) · `--template <path>` (custom
+role template with `{{TARGET_ROLE_PROFILE}}`/`{{USER_TASK}}`/`{{TOOLKIT_BLOCK}}` slots) ·
+`--map <dir>`.
+
 **Positioning:** promper is built for frontier harnesses (Claude Code and friends). For
 custom harnesses — LangGraph, Flowise, bespoke agent loops — use
 [invoker](https://github.com/justjammin/invokerai) as an SDK routing node; it consumes the

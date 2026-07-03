@@ -52,6 +52,16 @@ async function run() {
     await mod.runScan(argv.slice(1));
     return;
   }
+  if (argv[0] === "hydrate") {
+    let mod;
+    try {
+      mod = await import("../dist/hydrate.js");
+    } catch (err) {
+      throw new Error(`could not load dist/hydrate.js (${err.message}); run \`npm run build\` first`);
+    }
+    await mod.runHydrate(argv.slice(1));
+    return;
+  }
   await main();
 }
 
