@@ -31,7 +31,6 @@ exports.ROLE_DOMAIN = {
     "qa-engineer": "testing",
     "sales-strategist": "sales",
     "security-engineer": "security",
-    "software-architect": "architecture",
     "ux-ui-designer": "design",
     "worldbuilding-scholar": "creative",
     // ported table

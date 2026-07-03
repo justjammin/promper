@@ -166,7 +166,9 @@ marked `[DRAFT — replace]`). **Zero spawns.**
 **--run:** after presenting the plan, execute per the Step 7.5 decisions — inline nodes run in
 the main context; subagent nodes spawn the selected agent via the Agent tool with the crafted
 brief (role implicit), respecting `deps` order and `parallel` flags, feeding each upstream
-node's result into downstream `[OUTPUT OF PROMPT <n>]` slots. Report results.
+node's result into downstream `[OUTPUT OF PROMPT <n>]` slots. If the selected agent's `.md`
+frontmatter carries an `initialPrompt` (e.g. the boiled roster's Caveman Ultra block),
+prepend that text to the brief. Report results.
 
 ---
 

@@ -93,6 +93,25 @@ npx @ninjamin/promper scan
 All 26 are pinned in the scanner's name table, so they classify deterministically —
 a fresh 26-agent map lands at ~23 domains, zero unmapped, ~16KB total (vs 104KB).
 
+### Managing the roster: `promper tools`
+
+```
+npx @ninjamin/promper tools [--dir <path>]
+```
+
+Every agent carries a Caveman Ultra `initialPrompt:` block by default (added idempotently
+on every run; prepended to the brief when promper `--run` spawns the agent; harnesses that
+don't know the field ignore it). Then two interactive passes over `tools:` frontmatter:
+
+1. **Global:** pick tools applied to ALL agents (numbered list — built-in tools plus every
+   MCP tool discovered in your installed agents' frontmatter; `1,3,5-7` / `all` / empty=skip).
+2. **Individual:** pick a tool, then pick which agents get it; repeat until done.
+
+Selecting `All tools` replaces an agent's list outright. Non-interactive:
+`--all "Read,Bash"` · `--pick "WebSearch:marketing-strategist,sales-strategist"` (repeatable)
+· `--caveman-only` (just the initialPrompt pass) · `--check` (dry run).
+Default dir: `./agents` in a checkout, else `~/.claude/agents`.
+
 ## Install / use
 
 Quickest path, one command:

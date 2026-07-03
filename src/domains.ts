@@ -29,7 +29,6 @@ export const ROLE_DOMAIN: Readonly<Record<string, string>> = {
   "qa-engineer": "testing",
   "sales-strategist": "sales",
   "security-engineer": "security",
-  "software-architect": "architecture",
   "ux-ui-designer": "design",
   "worldbuilding-scholar": "creative",
   // ported table

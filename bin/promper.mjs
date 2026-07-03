@@ -3,6 +3,9 @@
 // npx runs from a throwaway cache, so we COPY (not symlink, which the repo uses for local dev).
 // `promper scan [--dir <path>] [--check] [--legacy] [--out <path>]` — build the
 // lean routing map at ~/.invoker/map/ deterministically (see dist/scan.js).
+// `promper tools [--dir <path>] [--check] [--caveman-only] [--all <csv>]
+//   [--pick <tool>:<agents>]` — ensure the caveman initialPrompt and manage
+//   agents' tools frontmatter (see dist/agents-cli.js).
 
 import { cp, mkdir, access } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -50,6 +53,16 @@ async function run() {
       throw new Error(`could not load dist/scan.js (${err.message}); run \`npm run build\` first`);
     }
     await mod.runScan(argv.slice(1));
+    return;
+  }
+  if (argv[0] === "tools") {
+    let mod;
+    try {
+      mod = await import("../dist/agents-cli.js");
+    } catch (err) {
+      throw new Error(`could not load dist/agents-cli.js (${err.message}); run \`npm run build\` first`);
+    }
+    await mod.runTools(argv.slice(1));
     return;
   }
   await main();
