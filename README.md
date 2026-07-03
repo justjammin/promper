@@ -64,6 +64,7 @@ promper reads the prim ledger, so when it's about to inherit a role from an unce
 ```
 promper/
   .claude-plugin/      plugin.json + marketplace.json
+  agents/              the boiled-down roster: 26 consolidated specialist agents
   skills/
     promper/SKILL.md   the "make" skill
     promper-setup/SKILL.md   builds the lean routing map (wraps `promper scan`)
@@ -72,6 +73,25 @@ promper/
   reference/
     pe-principles.md   shared source of truth (11 principles, XML skeleton, rubric)
 ```
+
+## The boiled-down roster (`agents/`)
+
+Sprawling agent collections route badly and cost tokens: 248 installed agents means a
+104KB map and razor-thin differences between siblings. `agents/` is the consolidation:
+**26 archetypes** that absorb the whole roster — each with an explicit expertise map
+preserving the absorbed specialisms (China platforms, game engines, XR stacks stay named),
+a routing-optimized description, prompt-engineering-grade structure (identity,
+instructions, constraints, hallucination guard), and a `Consolidates:` provenance line.
+
+Adopt it by copying into your agents dir and rescanning:
+
+```
+cp <repo>/agents/*.md ~/.claude/agents/   # or start clean: use ONLY these 26
+npx @ninjamin/promper scan
+```
+
+All 26 are pinned in the scanner's name table, so they classify deterministically —
+a fresh 26-agent map lands at ~23 domains, zero unmapped, ~16KB total (vs 104KB).
 
 ## Install / use
 

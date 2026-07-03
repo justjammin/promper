@@ -12,6 +12,7 @@
     "build": "tsc"
   },
   "files": [
+    "agents/",
     "bin/",
     "dist/",
     "src/",

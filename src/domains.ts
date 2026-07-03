@@ -7,6 +7,32 @@
 
 /** Exact agent-name → domain table (port of `_ROLE_DOMAIN`). */
 export const ROLE_DOMAIN: Readonly<Record<string, string>> = {
+  // promper's own boiled-down roster (repo agents/ dir) — pinned so the
+  // consolidated agents classify deterministically instead of by keyword.
+  "ai-ml-engineer": "ml",
+  "backend-engineer": "backend",
+  "business-strategist": "business",
+  "china-market-strategist": "marketing",
+  "content-writer": "content",
+  "customer-success-manager": "customer-support",
+  "devops-sre": "devops",
+  "finance-analyst": "finance",
+  "frontend-engineer": "frontend",
+  "game-xr-developer": "game-dev",
+  "legal-hr-advisor": "legal",
+  "marketing-strategist": "marketing",
+  "mobile-engineer": "mobile",
+  "paid-media-strategist": "marketing",
+  "product-manager": "product",
+  "project-orchestrator": "project-management",
+  "prompt-engineer": "ml",
+  "qa-engineer": "testing",
+  "sales-strategist": "sales",
+  "security-engineer": "security",
+  "software-architect": "architecture",
+  "ux-ui-designer": "design",
+  "worldbuilding-scholar": "creative",
+  // ported table
   "backend-developer": "backend",
   "fullstack-developer": "backend",
   "fastapi-developer": "backend",

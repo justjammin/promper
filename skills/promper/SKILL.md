@@ -114,9 +114,10 @@ loaded; no subagent needed. Complete `<context>`, `<instructions>`, `<examples>`
 `<constraints>`, `<output_format>`, and a `<thinking>` directive when the task needs reasoning.
 `--target=costar` fills the CO-STAR skeleton instead.
 
-**`--deep` only:** spawn the Prompt Engineer agent (subagent_type `"Prompt Engineer"`; agent
-file `engineering-prompt-engineer.md`; if that identifier doesn't resolve, fall back to
-`general-purpose` and note it) with the intent, chosen role(s), the 11-principle checklist, and
+**`--deep` only:** spawn the Prompt Engineer agent (try subagent_type `"Prompt Engineer"`,
+then `"prompt-engineer"` — the boiled roster's name; agent files
+`engineering-prompt-engineer.md` / `agents/prompt-engineer.md`; if neither resolves, fall
+back to `general-purpose` and note it) with the intent, chosen role(s), the 11-principle checklist, and
 the skeleton — for heavier drafting plus proposed test cases. `--deep` affects this step only;
 routing and role inheritance (Steps 4–5) stay inline.
 
