@@ -96,12 +96,18 @@ candidates. `--agent=<name>` skips discovery entirely.
 **Selection (all tiers):** the agent whose description most closely matches the node's
 `action`. No good fit → generic expert role + explicit gap note.
 
-### Step 5 — Inherit the role
+### Step 5 — Inherit the role (persona + plugin toolkit)
 For each node's selected agent, fetch its persona — first hit wins:
-1. The agent's own `.md`: `~/.claude/agents/<file>` using the `file` field from the map piece,
-   else try `~/.claude/agents/<name>.md`, then `./.claude/agents/<name>.md`. The system-prompt
-   body is the persona.
-2. Fallback: the description string already in hand (session list or map piece) — zero extra reads.
+1. **Plugin agent** (the map piece carries a `plugin` field): resolve the piece's relative
+   `file` against the `roots` array in `~/.invoker/map/index.json` — the `.md` body is the
+   persona. Then inherit the plugin's toolkit: list
+   `<root>/plugins/<plugin>/skills/` and `<root>/plugins/<plugin>/commands/` (names only,
+   no file reads) and fold them into the role — portable prompts get one line,
+   `This role carries the <plugin> toolkit — skills: <names>; commands: <names>`; `--run`
+   spawns include the same list in the brief so the agent reaches for its own skills.
+2. Local agent: `~/.claude/agents/<file>` from the piece, else `~/.claude/agents/<name>.md`,
+   then `./.claude/agents/<name>.md`.
+3. Fallback: the description string already in hand (session list or map piece) — zero extra reads.
 That persona becomes the node's `<role>`. **Never invent a role when an agent was selected.**
 
 Optional but recommended: check the `prim` ledger (`~/.claude/agents/.prim-seal.json`). If the

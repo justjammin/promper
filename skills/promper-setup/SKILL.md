@@ -40,14 +40,22 @@ npx @ninjamin/promper scan
 # or, from a local checkout: node <repo>/bin/promper.mjs scan
 ```
 
-Flags: `--check` dry run · `--dir <path>` extra agent dirs (repeatable) · `--legacy` also
-refresh the legacy agent-map.json · `--out <path>` alternate map dir.
+Flags: `--check` dry run · `--dir <path>` extra agent dirs (repeatable) ·
+`--plugins <root>` scan a plugin marketplace (repeatable) · `--no-defaults` skip the default
+agent dirs · `--legacy` also refresh the legacy agent-map.json · `--out <path>` alternate map dir.
 
 Default scan dirs: `~/.claude/agents`, `./.claude/agents`, `~/.codex/agents`,
 `~/.gemini/agents`. The scanner is idempotent and additive: existing domain assignments are
 authoritative (it never moves or renames), it classifies only new agents (name table →
 description keywords → `unmapped`), drops entries whose source `.md` vanished, and writes
 sorted, byte-stable files.
+
+**Plugin marketplaces (e.g. wshobson/agents):** `--plugins <root>` walks
+`<root>/plugins/*/agents/*.md`. Entries record the owning `plugin` and a root-relative
+`file`; the root lands in `index.json` (`roots`) so `/promper` can resolve personas AND
+inherit the plugin's `skills/` + `commands/` toolkit at role time. Plugin entries win name
+collisions against the default dirs. For a marketplace-canonical map use
+`--plugins <root> --no-defaults`. Rescans of a plugins map must repeat `--plugins <root>`.
 
 ### Step 2 — Relay the report
 Show the user: map path, domain and agent counts, new agents, dropped agents, unmapped list.

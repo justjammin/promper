@@ -62,6 +62,8 @@ const MAP_VERSION = 1;
 function parseArgs(argv) {
     const opts = {
         extraDirs: [],
+        pluginRoots: [],
+        noDefaults: false,
         check: false,
         legacy: false,
         outDir: path.join((0, node_os_1.homedir)(), ".invoker", "map"),
@@ -76,6 +78,13 @@ function parseArgs(argv) {
                 opts.extraDirs.push(value);
                 break;
             }
+            case "--plugins": {
+                const value = argv[++i];
+                if (!value)
+                    throw new Error("--plugins requires a marketplace root path");
+                opts.pluginRoots.push(value);
+                break;
+            }
             case "--out": {
                 const value = argv[++i];
                 if (!value)
@@ -85,6 +94,9 @@ function parseArgs(argv) {
             }
             case "--check":
                 opts.check = true;
+                break;
+            case "--no-defaults":
+                opts.noDefaults = true;
                 break;
             case "--legacy":
                 opts.legacy = true;
@@ -108,8 +120,7 @@ function defaultScanDirs() {
     ];
 }
 /** Scan all dirs for *.md agent files. First occurrence of a name wins. */
-async function scanDirs(dirs) {
-    const agents = new Map();
+async function scanDirs(dirs, agents = new Map()) {
     for (const dir of dirs) {
         let fileNames;
         try {
@@ -148,6 +159,7 @@ async function scanDirs(dirs) {
                 name,
                 description,
                 file: fileName,
+                classifyName: name,
                 tools: (0, frontmatter_js_1.normalizeTools)(fm["tools"]),
                 hasDescription: description.length > 0,
             };
@@ -157,6 +169,78 @@ async function scanDirs(dirs) {
         }
     }
     return agents;
+}
+/**
+ * Scan plugin-marketplace roots (wshobson/agents layout): `<root>/plugins/<plugin>/agents/*.md`.
+ * Entries record the owning `plugin` and a root-relative `file` path so persona fetch (and the
+ * plugin's skills/ + commands/) resolve from the root stored in index.json. Frontmatter names
+ * are typically plugin-prefixed ("backend-development-backend-architect"), so classification
+ * uses the prefix-stripped file stem, which hits the name table.
+ */
+async function scanPluginRoots(roots, agents) {
+    for (const root of roots) {
+        const pluginsDir = path.join(root, "plugins");
+        let pluginNames;
+        try {
+            pluginNames = await node_fs_1.promises.readdir(pluginsDir);
+        }
+        catch {
+            continue;
+        }
+        pluginNames.sort();
+        for (const plugin of pluginNames) {
+            const agentsDir = path.join(pluginsDir, plugin, "agents");
+            let fileNames;
+            try {
+                fileNames = await node_fs_1.promises.readdir(agentsDir);
+            }
+            catch {
+                continue; // plugin without agents/
+            }
+            fileNames.sort();
+            for (const fileName of fileNames) {
+                if (!fileName.endsWith(".md"))
+                    continue;
+                const fullPath = path.join(agentsDir, fileName);
+                let text;
+                try {
+                    const stat = await node_fs_1.promises.stat(fullPath);
+                    if (!stat.isFile())
+                        continue;
+                    text = await node_fs_1.promises.readFile(fullPath, "utf8");
+                }
+                catch {
+                    continue;
+                }
+                const fm = (0, frontmatter_js_1.parseFrontmatter)(text);
+                if (fm === null)
+                    continue;
+                const stem = path.basename(fileName, ".md");
+                let name = typeof fm["name"] === "string" ? fm["name"].trim() : "";
+                if (!name)
+                    name = `${plugin}-${stem}`;
+                if (agents.has(name))
+                    continue;
+                const description = (0, frontmatter_js_1.flattenDescription)(fm["description"]);
+                const modelRaw = fm["model"];
+                const model = typeof modelRaw === "string" && modelRaw.trim() && modelRaw.trim() !== "inherit"
+                    ? modelRaw.trim()
+                    : undefined;
+                const agent = {
+                    name,
+                    description,
+                    file: path.relative(root, fullPath),
+                    plugin,
+                    classifyName: stem,
+                    tools: (0, frontmatter_js_1.normalizeTools)(fm["tools"]),
+                    hasDescription: description.length > 0,
+                };
+                if (model !== undefined)
+                    agent.model = model;
+                agents.set(name, agent);
+            }
+        }
+    }
 }
 // ---------------------------------------------------------------------------
 // Existing map loading
@@ -221,6 +305,8 @@ function makeEntry(scanned) {
         description: scanned.description,
         file: scanned.file,
     };
+    if (scanned.plugin !== undefined)
+        entry["plugin"] = scanned.plugin;
     if (scanned.model !== undefined)
         entry.model = scanned.model;
     return entry;
@@ -277,7 +363,7 @@ function merge(scanned, existing) {
             noDescription.push(name); // skipped from map, reported as unmapped
             continue;
         }
-        const { domain: classified } = (0, classify_js_1.classify)(name, source.description);
+        const { domain: classified } = (0, classify_js_1.classify)(source.classifyName, source.description);
         const domain = resolveDomainAlias(classified, existing?.domains ?? []);
         push(domain, makeEntry(source));
         newAgents.push({ name, domain });
@@ -298,14 +384,20 @@ function merge(scanned, existing) {
         previousDomains: existing?.domains ?? [],
     };
 }
-function serializeIndex(buckets) {
+function serializeIndex(buckets, pluginRoots) {
     const domains = {};
     for (const domain of [...buckets.keys()].sort()) {
         const bucket = buckets.get(domain);
         if (bucket)
             domains[domain] = bucket.map((e) => e.name);
     }
-    return JSON.stringify({ version: MAP_VERSION, domains }, null, 2) + "\n";
+    const out = { version: MAP_VERSION };
+    // Persona fetch resolves plugin agents' relative `file` paths (and the plugin's
+    // skills/ + commands/) against these roots.
+    if (pluginRoots.length > 0)
+        out["roots"] = pluginRoots.map((r) => path.resolve(r)).sort();
+    out["domains"] = domains;
+    return JSON.stringify(out, null, 2) + "\n";
 }
 function serializePiece(entries) {
     return JSON.stringify(entries, null, 2) + "\n";
@@ -360,14 +452,16 @@ async function writeIfChanged(filePath, content, check) {
 // ---------------------------------------------------------------------------
 async function runScan(argv) {
     const opts = parseArgs(argv);
-    const dirs = [...defaultScanDirs(), ...opts.extraDirs];
-    const scanned = await scanDirs(dirs);
+    const dirs = [...(opts.noDefaults ? [] : defaultScanDirs()), ...opts.extraDirs];
+    const scanned = new Map();
+    await scanPluginRoots(opts.pluginRoots, scanned); // plugin roots win name collisions
+    await scanDirs(dirs, scanned);
     const existing = await loadExisting(opts.outDir);
     const result = merge(scanned, existing);
     const changedFiles = [];
     const staleRemoved = [];
     // index.json
-    if (await writeIfChanged(path.join(opts.outDir, "index.json"), serializeIndex(result.buckets), opts.check)) {
+    if (await writeIfChanged(path.join(opts.outDir, "index.json"), serializeIndex(result.buckets, opts.pluginRoots), opts.check)) {
         changedFiles.push("index.json");
     }
     // pieces

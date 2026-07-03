@@ -37,12 +37,17 @@ interface ScannedAgent {
   description: string;
   file: string;
   model?: string;
+  plugin?: string;
+  /** name used for domain classification (prefix-stripped for plugin agents) */
+  classifyName: string;
   tools: string[];
   hasDescription: boolean;
 }
 
 interface ScanOptions {
   extraDirs: string[];
+  pluginRoots: string[];
+  noDefaults: boolean;
   check: boolean;
   legacy: boolean;
   outDir: string;
@@ -64,6 +69,8 @@ interface ExistingMap {
 function parseArgs(argv: string[]): ScanOptions {
   const opts: ScanOptions = {
     extraDirs: [],
+    pluginRoots: [],
+    noDefaults: false,
     check: false,
     legacy: false,
     outDir: path.join(homedir(), ".invoker", "map"),
@@ -77,6 +84,12 @@ function parseArgs(argv: string[]): ScanOptions {
         opts.extraDirs.push(value);
         break;
       }
+      case "--plugins": {
+        const value = argv[++i];
+        if (!value) throw new Error("--plugins requires a marketplace root path");
+        opts.pluginRoots.push(value);
+        break;
+      }
       case "--out": {
         const value = argv[++i];
         if (!value) throw new Error("--out requires a path");
@@ -85,6 +98,9 @@ function parseArgs(argv: string[]): ScanOptions {
       }
       case "--check":
         opts.check = true;
+        break;
+      case "--no-defaults":
+        opts.noDefaults = true;
         break;
       case "--legacy":
         opts.legacy = true;
@@ -111,8 +127,10 @@ function defaultScanDirs(): string[] {
 }
 
 /** Scan all dirs for *.md agent files. First occurrence of a name wins. */
-async function scanDirs(dirs: string[]): Promise<Map<string, ScannedAgent>> {
-  const agents = new Map<string, ScannedAgent>();
+async function scanDirs(
+  dirs: string[],
+  agents: Map<string, ScannedAgent> = new Map(),
+): Promise<Map<string, ScannedAgent>> {
   for (const dir of dirs) {
     let fileNames: string[];
     try {
@@ -147,6 +165,7 @@ async function scanDirs(dirs: string[]): Promise<Map<string, ScannedAgent>> {
         name,
         description,
         file: fileName,
+        classifyName: name,
         tools: normalizeTools(fm["tools"]),
         hasDescription: description.length > 0,
       };
@@ -155,6 +174,74 @@ async function scanDirs(dirs: string[]): Promise<Map<string, ScannedAgent>> {
     }
   }
   return agents;
+}
+
+/**
+ * Scan plugin-marketplace roots (wshobson/agents layout): `<root>/plugins/<plugin>/agents/*.md`.
+ * Entries record the owning `plugin` and a root-relative `file` path so persona fetch (and the
+ * plugin's skills/ + commands/) resolve from the root stored in index.json. Frontmatter names
+ * are typically plugin-prefixed ("backend-development-backend-architect"), so classification
+ * uses the prefix-stripped file stem, which hits the name table.
+ */
+async function scanPluginRoots(roots: string[], agents: Map<string, ScannedAgent>): Promise<void> {
+  for (const root of roots) {
+    const pluginsDir = path.join(root, "plugins");
+    let pluginNames: string[];
+    try {
+      pluginNames = await fs.readdir(pluginsDir);
+    } catch {
+      continue;
+    }
+    pluginNames.sort();
+    for (const plugin of pluginNames) {
+      const agentsDir = path.join(pluginsDir, plugin, "agents");
+      let fileNames: string[];
+      try {
+        fileNames = await fs.readdir(agentsDir);
+      } catch {
+        continue; // plugin without agents/
+      }
+      fileNames.sort();
+      for (const fileName of fileNames) {
+        if (!fileName.endsWith(".md")) continue;
+        const fullPath = path.join(agentsDir, fileName);
+        let text: string;
+        try {
+          const stat = await fs.stat(fullPath);
+          if (!stat.isFile()) continue;
+          text = await fs.readFile(fullPath, "utf8");
+        } catch {
+          continue;
+        }
+        const fm = parseFrontmatter(text);
+        if (fm === null) continue;
+
+        const stem = path.basename(fileName, ".md");
+        let name = typeof fm["name"] === "string" ? (fm["name"] as string).trim() : "";
+        if (!name) name = `${plugin}-${stem}`;
+        if (agents.has(name)) continue;
+
+        const description = flattenDescription(fm["description"]);
+        const modelRaw = fm["model"];
+        const model =
+          typeof modelRaw === "string" && modelRaw.trim() && modelRaw.trim() !== "inherit"
+            ? modelRaw.trim()
+            : undefined;
+
+        const agent: ScannedAgent = {
+          name,
+          description,
+          file: path.relative(root, fullPath),
+          plugin,
+          classifyName: stem,
+          tools: normalizeTools(fm["tools"]),
+          hasDescription: description.length > 0,
+        };
+        if (model !== undefined) agent.model = model;
+        agents.set(name, agent);
+      }
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -227,6 +314,7 @@ function makeEntry(scanned: ScannedAgent): PieceEntry {
     description: scanned.description,
     file: scanned.file,
   };
+  if (scanned.plugin !== undefined) entry["plugin"] = scanned.plugin;
   if (scanned.model !== undefined) entry.model = scanned.model;
   return entry;
 }
@@ -285,7 +373,7 @@ function merge(scanned: Map<string, ScannedAgent>, existing: ExistingMap | null)
       noDescription.push(name); // skipped from map, reported as unmapped
       continue;
     }
-    const { domain: classified } = classify(name, source.description);
+    const { domain: classified } = classify(source.classifyName, source.description);
     const domain = resolveDomainAlias(classified, existing?.domains ?? []);
     push(domain, makeEntry(source));
     newAgents.push({ name, domain });
@@ -309,13 +397,18 @@ function merge(scanned: Map<string, ScannedAgent>, existing: ExistingMap | null)
   };
 }
 
-function serializeIndex(buckets: Map<string, PieceEntry[]>): string {
+function serializeIndex(buckets: Map<string, PieceEntry[]>, pluginRoots: string[]): string {
   const domains: Record<string, string[]> = {};
   for (const domain of [...buckets.keys()].sort()) {
     const bucket = buckets.get(domain);
     if (bucket) domains[domain] = bucket.map((e) => e.name);
   }
-  return JSON.stringify({ version: MAP_VERSION, domains }, null, 2) + "\n";
+  const out: Record<string, unknown> = { version: MAP_VERSION };
+  // Persona fetch resolves plugin agents' relative `file` paths (and the plugin's
+  // skills/ + commands/) against these roots.
+  if (pluginRoots.length > 0) out["roots"] = pluginRoots.map((r) => path.resolve(r)).sort();
+  out["domains"] = domains;
+  return JSON.stringify(out, null, 2) + "\n";
 }
 
 function serializePiece(entries: PieceEntry[]): string {
@@ -375,9 +468,11 @@ async function writeIfChanged(filePath: string, content: string, check: boolean)
 
 export async function runScan(argv: string[]): Promise<void> {
   const opts = parseArgs(argv);
-  const dirs = [...defaultScanDirs(), ...opts.extraDirs];
+  const dirs = [...(opts.noDefaults ? [] : defaultScanDirs()), ...opts.extraDirs];
 
-  const scanned = await scanDirs(dirs);
+  const scanned = new Map<string, ScannedAgent>();
+  await scanPluginRoots(opts.pluginRoots, scanned); // plugin roots win name collisions
+  await scanDirs(dirs, scanned);
   const existing = await loadExisting(opts.outDir);
   const result = merge(scanned, existing);
 
@@ -385,7 +480,13 @@ export async function runScan(argv: string[]): Promise<void> {
   const staleRemoved: string[] = [];
 
   // index.json
-  if (await writeIfChanged(path.join(opts.outDir, "index.json"), serializeIndex(result.buckets), opts.check)) {
+  if (
+    await writeIfChanged(
+      path.join(opts.outDir, "index.json"),
+      serializeIndex(result.buckets, opts.pluginRoots),
+      opts.check,
+    )
+  ) {
     changedFiles.push("index.json");
   }
 

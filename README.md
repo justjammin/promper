@@ -93,8 +93,21 @@ npx @ninjamin/promper scan
 `~/.codex/agents`, and `~/.gemini/agents`, classifies by name table + description keywords,
 and writes the lean pieces to `~/.invoker/map/` (tiny `index.json` + one small file per
 domain — routing never reads a large file). Idempotent: existing assignments are never
-moved. Flags: `--check` (dry run) · `--dir <path>` (extra dirs) · `--legacy` (also refresh
-an old invokerai `agent-map.json`) · `--out <path>`.
+moved. Flags: `--check` (dry run) · `--dir <path>` (extra dirs) · `--plugins <root>`
+(scan a plugin marketplace) · `--no-defaults` · `--legacy` (also refresh an old invokerai
+`agent-map.json`) · `--out <path>`.
+
+**Plugin marketplaces as the role source:** point the scanner at a marketplace checkout —
+e.g. [wshobson/agents](https://github.com/wshobson/agents) (88 plugins, ~194 agents, each
+plugin bundling `agents/ + skills/ + commands/`):
+
+```
+promper scan --plugins ~/Documents/GitHub/wshobson-agents --no-defaults
+```
+
+Map entries record each agent's owning plugin; when promper inherits a role it also inherits
+the plugin's toolkit — the engineered prompt (or spawned brief) names the plugin's skills and
+commands so the role arrives with its equipment, not just its persona.
 
 **Positioning:** promper is built for frontier harnesses (Claude Code and friends). For
 custom harnesses — LangGraph, Flowise, bespoke agent loops — use
