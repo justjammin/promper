@@ -55,13 +55,10 @@ const node_os_1 = require("node:os");
 const path = __importStar(require("node:path"));
 const readline = __importStar(require("node:readline"));
 const frontmatter_js_1 = require("./frontmatter.js");
-exports.CAVEMAN_ULTRA = [
-    "# Style: caveman ultra",
-    "Prose/chat: drop articles, filler, hedging. Fragments OK. Abbreviate",
-    "(DB/auth/config/req/res/fn). X->Y for causality. Technical terms and identifiers exact.",
-    "Code, commits, PR bodies, and shipped deliverables (docs, copy, reports, customer-facing drafts): normal professional English. Break character for security warnings and",
-    "irreversible ops.",
-].join("\n");
+exports.CAVEMAN_ULTRA = "# Style: caveman ultra. Prose/chat: drop articles, filler, hedging. Fragments OK. " +
+    "Abbreviate (DB/auth/config/req/res/fn). X->Y for causality. Technical terms and identifiers exact. " +
+    "Code, commits, PR bodies, and shipped deliverables (docs, copy, reports, customer-facing drafts): " +
+    "normal professional English. Break character for security warnings and irreversible ops.";
 const BUILTIN_TOOLS = [
     "All tools",
     "Read",
@@ -224,8 +221,10 @@ function insertBeforeClose(bounds, newLines) {
     bounds.lines.splice(bounds.closeIdx, 0, ...newLines);
     bounds.closeIdx += newLines.length;
 }
+// Single line, double-quoted: an unquoted value starting with "#" is a YAML
+// comment and the field silently parses as null.
 function initialPromptLines() {
-    return ["initialPrompt: |", ...exports.CAVEMAN_ULTRA.split("\n").map((l) => `  ${l}`)];
+    return [`initialPrompt: ${JSON.stringify(exports.CAVEMAN_ULTRA)}`];
 }
 async function editAgentFile(filePath, edit, check) {
     const original = await node_fs_1.promises.readFile(filePath, "utf8");

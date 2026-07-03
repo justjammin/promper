@@ -18,13 +18,11 @@ import * as readline from "node:readline";
 
 import { parseFrontmatter, normalizeTools } from "./frontmatter.js";
 
-export const CAVEMAN_ULTRA = [
-  "# Style: caveman ultra",
-  "Prose/chat: drop articles, filler, hedging. Fragments OK. Abbreviate",
-  "(DB/auth/config/req/res/fn). X->Y for causality. Technical terms and identifiers exact.",
-  "Code, commits, PR bodies, and shipped deliverables (docs, copy, reports, customer-facing drafts): normal professional English. Break character for security warnings and",
-  "irreversible ops.",
-].join("\n");
+export const CAVEMAN_ULTRA =
+  "# Style: caveman ultra. Prose/chat: drop articles, filler, hedging. Fragments OK. " +
+  "Abbreviate (DB/auth/config/req/res/fn). X->Y for causality. Technical terms and identifiers exact. " +
+  "Code, commits, PR bodies, and shipped deliverables (docs, copy, reports, customer-facing drafts): " +
+  "normal professional English. Break character for security warnings and irreversible ops.";
 
 const BUILTIN_TOOLS = [
   "All tools",
@@ -207,8 +205,10 @@ function insertBeforeClose(bounds: FrontmatterBounds, newLines: string[]): void 
   bounds.closeIdx += newLines.length;
 }
 
+// Single line, double-quoted: an unquoted value starting with "#" is a YAML
+// comment and the field silently parses as null.
 function initialPromptLines(): string[] {
-  return ["initialPrompt: |", ...CAVEMAN_ULTRA.split("\n").map((l) => `  ${l}`)];
+  return [`initialPrompt: ${JSON.stringify(CAVEMAN_ULTRA)}`];
 }
 
 async function editAgentFile(
