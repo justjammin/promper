@@ -116,6 +116,29 @@ specialist agent the task routes to. promper performs the routing itself, inline
 
 ---
 
+## Role Anatomy (the 6 qualities of a strong agent persona)
+
+What separates a great role source from a capability list. `promper`'s roster is built to
+this; `prim` weighs it when scoring Role clarity, Examples, and Output format:
+
+1. **Worldview identity** — an experiential stance, not a job title ("reliability-obsessed;
+   has seen systems fail through shortcuts"). The stance shapes every downstream choice.
+2. **Decision heuristics** — "choose X based on A/B/C; Z only when W justifies the
+   complexity." Encodes judgment and tradeoffs; prevents over-engineering.
+3. **Quantified success bar** — measurable thresholds (p95 latency, uptime, error rates) so
+   "good" calibrates against numbers, not vibes.
+4. **Populated deliverable template** — one expert-dense artifact whose *content* is the
+   demonstration (real indexes, real constraints). Never bracketed placeholders: a skeleton
+   teaches shape; populated content teaches mastery.
+5. **Senior vocabulary steering** — domain terminology dense enough to raise generation
+   quality by itself (idempotency keys, expand-and-contract, DLQs).
+6. **Voice via sample utterances** — 3-4 example sentences that few-shot the register.
+
+Plus the two the rubric already enforces: few-shot `<example>` input→output blocks covering
+distinct specialisms with one edge/refusal case, and an explicit or demonstrated output format.
+
+---
+
 ## Scoring rubric (used by `prim`)
 
 Score each agent/prompt 0–100 against the principles. Suggested weighting:
