@@ -165,13 +165,9 @@ async function resolveViaWalk(roots: string[], agent: string): Promise<ResolvedA
   return null;
 }
 
-/** Persona = the body below the frontmatter (frontmatter is routing metadata, not voice). */
+/** Persona = the raw agent file, frontmatter included (name/description/model context travels with the role). */
 function personaBody(text: string): string {
-  if (text.startsWith("---")) {
-    const end = text.indexOf("\n---", 3);
-    if (end !== -1) return text.slice(end + 4).replace(/^\n+/, "").trimEnd();
-  }
-  return text.trim();
+  return text.trimEnd();
 }
 
 async function listNames(dir: string): Promise<string[]> {
