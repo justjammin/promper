@@ -59,7 +59,7 @@ exports.CAVEMAN_ULTRA = [
     "# Style: caveman ultra",
     "Prose/chat: drop articles, filler, hedging. Fragments OK. Abbreviate",
     "(DB/auth/config/req/res/fn). X->Y for causality. Technical terms and identifiers exact.",
-    "Code, commits, PR bodies: normal English. Break character for security warnings and",
+    "Code, commits, PR bodies, and shipped deliverables (docs, copy, reports, customer-facing drafts): normal professional English. Break character for security warnings and",
     "irreversible ops.",
 ].join("\n");
 const BUILTIN_TOOLS = [
