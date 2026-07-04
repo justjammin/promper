@@ -21,9 +21,11 @@ routing itself, inline. promper *makes*; `prim` *guards*; the agents *are* the r
 **Read first:** `~/Documents/GitHub/promper/reference/pe-principles.md` (the 11 principles, the
 Claude-XML skeleton, and the Role-Inheritance Contract). All behavior below depends on it.
 
-> promper never loads invokerai skills and never reads any map file whole. Its only setup
-> dependency is the lean map at `~/.invoker/map/` built by `/promper:setup` — and even that is
-> a fallback behind the in-session agent list (Step 4).
+> **Hard dependency:** the [wshobson/agents](https://github.com/wshobson/agents) marketplace
+> is promper's role source (registered as `claude-code-workflows`; bootstrap via
+> `promper bootstrap`, which `/promper:setup` runs). promper never loads invokerai skills and
+> never reads any map file whole — it walks the lean map at `~/.invoker/map/` built from that
+> marketplace.
 
 ---
 
@@ -90,8 +92,9 @@ candidates. `--agent=<name>` skips discovery entirely.
   `jq '.domains["<d>"] | length'`; **≤15 agents:** `jq '[.domains["<d>"][] | {name, description}]'`;
   **>15:** names first (`jq -r '[.domains["<d>"][].name] | join(", ")'`), shortlist 3–5, then
   `jq '[.domains["<d>"][] | select(.name | IN("a","b","c")) | {name, description}]'`.
-- **Tier 4 — nothing available.** Suggest `/promper:setup`, proceed with a generic expert role
-  for the inferred domain, and note the gap.
+- **Tier 4 — nothing available.** The hard dependency is missing — tell the user to run
+  `promper bootstrap` (installs the wshobson/agents marketplace and builds the map), proceed
+  with a generic expert role for the inferred domain, and note the gap.
 
 **Selection (all tiers):** the agent whose description most closely matches the node's
 `action`. No good fit → generic expert role + explicit gap note.

@@ -81,9 +81,19 @@ Quickest path, one command:
 npx @ninjamin/promper
 ```
 
-That copies the `promper`, `promper-setup`, and `prim` skills into `~/.claude/skills/`. Restart Claude Code and `/promper` and `/prim` resolve.
+That copies the `promper`, `promper-setup`, and `prim` skills into `~/.claude/skills/` **and
+bootstraps the role source** — promper has a hard dependency on the
+[wshobson/agents](https://github.com/wshobson/agents) plugin marketplace (88 plugins,
+~194 agents). The installer adds it via `claude plugin marketplace add wshobson/agents` when
+missing, then scans it into the map. Restart Claude Code and `/promper` and `/prim` resolve.
 
-Then build the routing map (deterministic scan, no model tokens):
+Re-run the bootstrap any time (idempotent; also what `/promper:setup` runs):
+
+```
+npx @ninjamin/promper bootstrap
+```
+
+To add supplementary local agents to the map (deterministic scan, no model tokens):
 
 ```
 npx @ninjamin/promper scan

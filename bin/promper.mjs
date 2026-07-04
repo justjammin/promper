@@ -1,20 +1,56 @@
 #!/usr/bin/env node
-// `npx promper` — copies the promper + prim skills into ~/.claude/skills/.
+// `npx promper` — copies the promper + prim skills into ~/.claude/skills/ and
+// bootstraps the role source (the wshobson/agents marketplace — a HARD dependency).
 // npx runs from a throwaway cache, so we COPY (not symlink, which the repo uses for local dev).
-// `promper scan [--dir <path>] [--check] [--legacy] [--out <path>]` — build the
-// lean routing map at ~/.invoker/map/ deterministically (see dist/scan.js).
+// `promper bootstrap` — ensure the wshobson/agents marketplace is added and scan it.
+// `promper scan [--plugins <root>] [--no-defaults] [--dir <path>] [--check] [--legacy] [--out <path>]`
+// `promper hydrate <agent> "<task>" [--json] [--template <path>] [--map <dir>]`
 
 import { cp, mkdir, access } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const SKILLS = ["promper", "promper-setup", "prim"];
+const MARKETPLACE_REPO = "wshobson/agents";
+const MARKETPLACE_NAME = "claude-code-workflows"; // its declared marketplace name
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const dest = join(homedir(), ".claude", "skills");
 
 async function exists(p) {
   try { await access(p); return true; } catch { return false; }
+}
+
+// promper's role source is a hard dependency: add the marketplace if missing, then scan it.
+async function bootstrap() {
+  const cache = join(homedir(), ".claude", "plugins", "marketplaces", MARKETPLACE_NAME);
+
+  if (!(await exists(cache))) {
+    console.log(`  role source missing — adding marketplace ${MARKETPLACE_REPO}…`);
+    const res = spawnSync("claude", ["plugin", "marketplace", "add", MARKETPLACE_REPO], {
+      stdio: "inherit",
+    });
+    if (res.status !== 0 || !(await exists(cache))) {
+      console.warn(
+        "\n  ⚠  promper REQUIRES wshobson/agents as its role source and could not add it automatically" +
+        (res.error ? ` (${res.error.message})` : "") + ".\n" +
+        "     Run:  claude plugin marketplace add wshobson/agents\n" +
+        "     Then: promper bootstrap\n"
+      );
+      return false;
+    }
+  }
+
+  let mod;
+  try {
+    mod = await import("../dist/scan.js");
+  } catch (err) {
+    throw new Error(`could not load dist/scan.js (${err.message}); run \`npm run build\` first`);
+  }
+  await mod.runScan(["--plugins", cache, "--no-defaults"]);
+  console.log(`\n  role source ready: ${cache}`);
+  return true;
 }
 
 async function main() {
@@ -27,21 +63,18 @@ async function main() {
     console.log(`  installed  ${name}  →  ${to}`);
   }
 
-  const mapIndex = join(homedir(), ".invoker", "map", "index.json");
-  const legacyMap = join(homedir(), ".invoker", "agent-map.json");
-  if (!(await exists(mapIndex)) && !(await exists(legacyMap))) {
-    console.warn(
-      "\n  ℹ  no routing map found (~/.invoker/map/ or ~/.invoker/agent-map.json).\n" +
-      "     /promper will route from the in-session agent list when available.\n" +
-      "     Run /promper:setup to build the lean map for reliable role inheritance."
-    );
-  }
+  await bootstrap();
 
   console.log("\n  Done. Restart Claude Code, then run /promper or /prim.\n");
 }
 
 async function run() {
   const argv = process.argv.slice(2);
+  if (argv[0] === "bootstrap") {
+    const ok = await bootstrap();
+    if (!ok) process.exit(1);
+    return;
+  }
   if (argv[0] === "scan") {
     let mod;
     try {

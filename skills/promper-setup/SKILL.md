@@ -33,11 +33,25 @@ keyword classifier could not.
 
 ## Flow
 
-### Step 1 — Run the scanner (deterministic, zero LLM)
+### Step 1 — Bootstrap the role source (deterministic, zero LLM)
+
+promper's role source is a **hard dependency**: the
+[wshobson/agents](https://github.com/wshobson/agents) plugin marketplace (registered as
+`claude-code-workflows`). One command installs it when missing and scans it:
+
+```bash
+npx @ninjamin/promper bootstrap
+# or, from a local checkout: node <repo>/bin/promper.mjs bootstrap
+```
+
+Bootstrap runs `claude plugin marketplace add wshobson/agents` if the cache is absent, then
+`promper scan --plugins ~/.claude/plugins/marketplaces/claude-code-workflows --no-defaults`.
+To refresh after upstream changes: `claude plugin marketplace update claude-code-workflows`,
+then re-run bootstrap. For supplementary local agents or other sources, use `promper scan`
+directly:
 
 ```bash
 npx @ninjamin/promper scan
-# or, from a local checkout: node <repo>/bin/promper.mjs scan
 ```
 
 Flags: `--check` dry run · `--dir <path>` extra agent dirs (repeatable) ·
