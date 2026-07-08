@@ -27,6 +27,15 @@ Claude-XML skeleton, and the Role-Inheritance Contract). All behavior below depe
 > never reads any map file whole — it walks the lean map at `~/.invoker/map/` built from that
 > marketplace.
 
+> **This is the manual path.** `/promper` is the deliberate, plan-first invocation — presents
+> prompts, spawns nothing. promper also runs *automatically* via three hooks (`hooks/hooks.json`)
+> that reuse this same routing/inheritance logic without duplicating it: a `SessionStart` hook
+> injects the standing orchestration contract, a `UserPromptSubmit` hook nudges this agent-walk
+> on a new substantial task (silent on a follow-up), and a `PreToolUse` hook deterministically
+> rewrites a subagent's spawn brief once this skill has recorded a routed agent (Step 7.5). See
+> the README's "Active mode" section for the full picture; the routing/inheritance rules below
+> are the single source of truth both paths defer to.
+
 ---
 
 ## Invocation
@@ -110,7 +119,12 @@ For each node's selected agent, fetch its persona — first hit wins:
    spawns include the same list in the brief so the agent reaches for its own skills.
    Mechanical shortcut for spawn briefs: `promper hydrate <agent> "<task>"` emits the
    persona + toolkit + task as one spawn-ready prompt (`--json` for programmatic use) —
-   spawn it via a `general-purpose` subagent; no plugin install needed.
+   spawn it via a `general-purpose` subagent; no plugin install needed. For a *description*-matched
+   suggestion rather than a bare name list (e.g. "use the `saga-orchestration` skill for this"),
+   consult `~/.invoker/map/toolkits.json[<plugin>]` (built by `promper scan`, keyed by plugin —
+   a domain can span several plugins) and surface the best-fitting skill/command by name only
+   when its description clearly matches the node's `action`; say nothing otherwise — a suggestion,
+   never a requirement.
 2. Local agent: `~/.claude/agents/<file>` from the piece, else `~/.claude/agents/<name>.md`,
    then `./.claude/agents/<name>.md`.
 3. Fallback: the description string already in hand (session list or map piece) — zero extra reads.
@@ -159,9 +173,18 @@ results are ~60% smaller.
 Report format: `node-1 → inline (light)` · `node-2 → subagent backend-developer (noisy, parallel)`.
 
 Record the decision at `~/.invoker/state/promper-decision.json` —
-`{"verdict":"inline"|"agent"|"mixed","repo":"<repo root>","reason":"<one line>","ts":<epoch ms>}`.
-The edit gate honors it: verdict `inline`/`mixed` unlocks direct edits in the repo (60-min TTL);
-verdict `agent` means the work must go to the spawned specialist.
+`{"verdict":"inline"|"agent"|"mixed","repo":"<repo root>","agent":"<routed agent name>","reason":"<one line>","ts":<epoch ms>}`.
+`repo` is the git repo root (`git rev-parse --show-toplevel`; fall back to cwd outside a git
+repo) — the deterministic spawn hook compares against this exact value, so an inconsistent cwd
+(a subdirectory, a trailing slash) silently breaks the hand-off below. `agent` is optional:
+include the routed agent's map name when Step 4b resolved one (most intents are single-node, so
+this is unambiguous; for a genuinely mixed multi-agent graph, omit it rather than guess which
+node's agent should own the repo-wide slot). The edit gate honors `verdict`: `inline`/`mixed`
+unlocks direct edits in the repo (60-min TTL); `agent` means the work must go to the spawned
+specialist. Separately, when `agent` is present, promper's `PreToolUse` spawn hook
+(`hooks/enrich-spawn.mjs`) inherits that exact role automatically on the next general-purpose
+subagent spawn in this repo (same 60-min TTL) — routing happens once, here, and the hook stays
+deterministic.
 
 When beads are on (Step 4a), execution drives the ticket lifecycle: mark the node's ticket
 running at start, close it with the executing agent's name on completion, prune the batch when

@@ -63,15 +63,61 @@ promper reads the prim ledger, so when it's about to inherit a role from an unce
 
 ```
 promper/
-  .claude-plugin/      plugin.json + marketplace.json
+  .claude-plugin/      plugin.json (generated) + marketplace.json
+  .codex-plugin/       plugin.json (generated) — the codex-side manifest
+  plugin.source.json   canonical metadata both manifests are generated from
+  tools/
+    gen-manifests.mjs  `npm run build:manifests` — regenerates both manifests
+  hooks/
+    hooks.json         SessionStart + UserPromptSubmit + PreToolUse registrations
+    inject-contract.mjs   SessionStart: injects the orchestration contract (below)
+    contract.md            the contract text itself
+    gate-prompt.mjs        UserPromptSubmit: deep-dive-vs-follow-up gate
+    enrich-spawn.mjs       PreToolUse: role-bearing spawn-brief rewrite
   skills/
-    promper/SKILL.md   the "make" skill
+    promper/SKILL.md   the "make" skill (manual path: `/promper`)
     promper-setup/SKILL.md   builds the lean routing map (wraps `promper scan`)
     prim/SKILL.md      the "evaluate / certify" skill
-  src/                 the TypeScript scanner (`promper scan`) — deterministic, zero LLM
+  src/                 the TypeScript engine (`scan`/`hydrate`/`brief`/`gate`) — deterministic, zero LLM
   reference/
     pe-principles.md   shared source of truth (11 principles, XML skeleton, rubric)
 ```
+
+## Active mode
+
+Everything above is the **manual** path — you type `/promper` and it engineers a prompt,
+plan-first, zero spawns. promper also runs **automatically**, via three hooks that ship with
+the plugin (`hooks/hooks.json`), so the agent-walk happens without you remembering to invoke it:
+
+| Hook | Event | What it does |
+|---|---|---|
+| `inject-contract.mjs` | `SessionStart` | Injects the routing + execution-decision + edit-gate contract as standing context — see `hooks/contract.md`. Runs every session start (startup/resume/compact/clear). |
+| `gate-prompt.mjs` | `UserPromptSubmit` | Deterministic classifier (`promper gate`, no LLM): a session opener or a new substantial task nudges the model to run the agent-walk and record the routed agent; an ordinary follow-up ("also...", "what about...", a short reply) stays silent. Biased toward under-triggering — it never nags. |
+| `enrich-spawn.mjs` | `PreToolUse` (matcher `Agent\|Task`) | Deterministic role-bearing brief (`promper brief`, no LLM): rewrites a subagent's prompt **only when it adds real value** — a full persona (when a routed agent name is known) or a toolkit line (for an already-named agent). A spawn with nothing to add is left completely untouched, never wrapped in empty boilerplate. |
+
+The hand-off between the nudge and the rewrite is `~/.invoker/state/promper-decision.json`:
+when the agent-walk (Step 7.5 in `skills/promper/SKILL.md`) routes to a specialist, it records
+`{"verdict", "repo", "agent", "reason", "ts"}` there (60-min TTL, keyed to the git repo root);
+`enrich-spawn.mjs` reads it back and inherits that exact role on the next general-purpose spawn
+in the same repo — routing happens once, in the model, and the hooks stay deterministic.
+
+**Off switch:** `PROMPER_ACTIVE=0` disables all three hooks. `/promper`, `/prim`, and
+`/promper:setup` are unaffected either way — they stay available as the manual override.
+
+**Caveats:**
+- Verified on Claude Code CLI. Codex support (`.codex-plugin/plugin.json` + the same hooks) is
+  shipped but **experimental** — not yet verified against a real Codex install.
+- `UserPromptSubmit`'s `additionalContext` is CLI-only; the VSCode extension currently drops it
+  ([anthropics/claude-code#49063](https://github.com/anthropics/claude-code/issues/49063)), so
+  the deep-dive nudge silently no-ops there. The spawn-brief rewrite and SessionStart injection
+  are unaffected.
+
+**Retire it from your global config.** If you'd previously hand-rolled any of this — a routing/
+execution-decision/subagent-strategy block in `~/.claude/CLAUDE.md`, or a `UserPromptSubmit`
+hook in `~/.claude/settings.json` that echoes a static promper reminder on every turn — remove
+it once this plugin is installed. `inject-contract.mjs` covers the standing rules, and
+`gate-prompt.mjs` is the same nudge but gated on an actual new task instead of firing on every
+single prompt.
 
 ## Install / use
 
@@ -103,9 +149,17 @@ npx @ninjamin/promper scan
 `~/.codex/agents`, and `~/.gemini/agents`, classifies by name table + description keywords,
 and writes the lean pieces to `~/.invoker/map/` (tiny `index.json` + one small file per
 domain — routing never reads a large file). Idempotent: existing assignments are never
-moved. Flags: `--check` (dry run) · `--dir <path>` (extra dirs) · `--plugins <root>`
-(scan a plugin marketplace) · `--no-defaults` · `--legacy` (also refresh an old invokerai
-`agent-map.json`) · `--out <path>`.
+moved, and re-scanning with a narrower flag set never drops an entry whose source file still
+exists — only a genuinely-vanished file gets dropped. Flags: `--check` (dry run) ·
+`--dir <path>` (extra dirs) · `--plugins <root>` (a wshobson-style marketplace:
+`<root>/plugins/<plugin>/agents/*.md`) · `--categories <root>` (a category-flat agent repo:
+`<root>/<category>/*.md`, no nested `agents/` folder — e.g.
+[awesome-claude-code-subagents](https://github.com/VoltAgent/awesome-claude-code-subagents),
+[agency-agents](https://github.com/msitarzewski/agency-agents)) · `--no-defaults` ·
+`--legacy` (also refresh an old invokerai `agent-map.json`) · `--out <path>`. Every
+`--plugins`/`--categories` root also feeds `~/.invoker/map/toolkits.json` — each plugin's
+skills/commands indexed once, by description, for the routing suggestions in Step 5 of
+`skills/promper/SKILL.md`.
 
 **Plugin marketplaces as the role source:** point the scanner at a marketplace checkout —
 e.g. [wshobson/agents](https://github.com/wshobson/agents) (88 plugins, ~194 agents, each
@@ -127,11 +181,20 @@ promper hydrate fastapi-pro "Build a secure OAuth2 routing system with JWT verif
 ```
 
 `hydrate` resolves the agent through the map (exact name or file stem — `fastapi-pro` finds
-`api-scaffolding-fastapi-pro`), falls back to a recursive marketplace walk, strips the
-frontmatter, folds in the plugin's toolkit, and emits one spawn-ready prompt. Flags:
+`api-scaffolding-fastapi-pro`), falls back to a recursive marketplace walk, keeps the agent's
+frontmatter (name/description/model context travels with the role), folds in the plugin's
+toolkit, and emits one spawn-ready prompt. Flags:
 `--json` (structured output for programmatic spawning) · `--template <path>` (custom
 role template with `{{TARGET_ROLE_PROFILE}}`/`{{USER_TASK}}`/`{{TOOLKIT_BLOCK}}` slots) ·
 `--map <dir>`.
+
+These same two deterministic building blocks power the hooks described in
+[Active mode](#active-mode) below: `promper brief "<task>" [--agent <name>] [--subagent-type
+<type>] [--json]` applies the role-bearing precedence (named agent → hydrate → unrouted) that
+`enrich-spawn.mjs` calls directly (in-process, no subprocess), and
+`promper gate "<prompt>" [--transcript <path>] [--json]` is the deep-dive-vs-follow-up
+classifier `gate-prompt.mjs` uses the same way. Both are also plain CLI commands — useful
+standalone for debugging what a hook would do, without needing a live spawn.
 
 **Positioning:** promper is built for frontier harnesses (Claude Code and friends). For
 custom harnesses — LangGraph, Flowise, bespoke agent loops — use

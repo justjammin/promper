@@ -1,3 +1,9 @@
+// src/brief.ts
+import { spawnSync } from "node:child_process";
+import { promises as fs2 } from "node:fs";
+import { homedir as homedir2 } from "node:os";
+import * as path2 from "node:path";
+
 // src/hydrate.ts
 import { promises as fs } from "node:fs";
 import { homedir } from "node:os";
@@ -3088,46 +3094,6 @@ Do not announce the adoption or speak out of character.
 [TASK]
 {{USER_TASK}}
 `;
-function parseArgs(argv) {
-  const positional = [];
-  const opts = {
-    agent: "",
-    task: "",
-    mapDir: path.join(homedir(), ".invoker", "map"),
-    templatePath: null,
-    json: false
-  };
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i];
-    if (arg === void 0) continue;
-    switch (arg) {
-      case "--map": {
-        const value = argv[++i];
-        if (!value) throw new Error("--map requires a path");
-        opts.mapDir = value;
-        break;
-      }
-      case "--template": {
-        const value = argv[++i];
-        if (!value) throw new Error("--template requires a path");
-        opts.templatePath = value;
-        break;
-      }
-      case "--json":
-        opts.json = true;
-        break;
-      default:
-        if (arg.startsWith("--")) throw new Error(`unknown flag: ${arg}`);
-        positional.push(arg);
-    }
-  }
-  const agent = positional.shift();
-  if (!agent) throw new Error('usage: promper hydrate <agent> "<task>" [--template <path>] [--map <dir>] [--json]');
-  opts.agent = agent;
-  opts.task = positional.join(" ").trim();
-  if (!opts.task) throw new Error("hydrate requires a task description after the agent name");
-  return opts;
-}
 async function readJson(filePath) {
   try {
     return JSON.parse(await fs.readFile(filePath, "utf8"));
@@ -3256,22 +3222,172 @@ async function hydrateAgent(agentName, task, opts = {}) {
   const prompt = template.replaceAll("{{AGENT_NAME}}", displayName).replaceAll("{{PLUGIN_SUFFIX}}", resolved.plugin ? ` (${resolved.plugin})` : "").replaceAll("{{PLUGIN}}", resolved.plugin ?? "").replaceAll("{{TARGET_ROLE_PROFILE}}", persona).replaceAll("{{TOOLKIT_BLOCK}}", toolkitBlock).replaceAll("{{USER_TASK}}", task);
   return { agent: displayName, plugin: resolved.plugin, source: resolved.absPath, skills, commands, prompt };
 }
-async function runHydrate(argv) {
+
+// src/brief.ts
+var HALLUCINATION_GUARD = "If unsure or information is missing, say so rather than inventing.";
+var STATE_TTL_MS = 60 * 60 * 1e3;
+function parseArgs(argv) {
+  const positional = [];
+  const opts = {
+    task: "",
+    agent: null,
+    subagentType: null,
+    mapDir: path2.join(homedir2(), ".invoker", "map"),
+    statePath: path2.join(homedir2(), ".invoker", "state", "promper-decision.json"),
+    json: false
+  };
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === void 0) continue;
+    switch (arg) {
+      case "--agent": {
+        const value = argv[++i];
+        if (!value) throw new Error("--agent requires a name");
+        opts.agent = value;
+        break;
+      }
+      case "--subagent-type": {
+        const value = argv[++i];
+        if (!value) throw new Error("--subagent-type requires a value");
+        opts.subagentType = value;
+        break;
+      }
+      case "--map": {
+        const value = argv[++i];
+        if (!value) throw new Error("--map requires a path");
+        opts.mapDir = value;
+        break;
+      }
+      case "--state": {
+        const value = argv[++i];
+        if (!value) throw new Error("--state requires a path");
+        opts.statePath = value;
+        break;
+      }
+      case "--json":
+        opts.json = true;
+        break;
+      default:
+        if (arg.startsWith("--")) throw new Error(`unknown flag: ${arg}`);
+        positional.push(arg);
+    }
+  }
+  opts.task = positional.join(" ").trim();
+  if (!opts.task) throw new Error('usage: promper brief "<task>" [--agent <name>] [--subagent-type <type>] [--json]');
+  return opts;
+}
+function gitRoot() {
+  const result = spawnSync("git", ["rev-parse", "--show-toplevel"], { cwd: process.cwd(), encoding: "utf8" });
+  const top = result.status === 0 ? result.stdout.trim() : "";
+  return top || process.cwd();
+}
+async function persistedAgent(statePath) {
+  let decision;
+  try {
+    decision = JSON.parse(await fs2.readFile(statePath, "utf8"));
+  } catch {
+    return null;
+  }
+  if (typeof decision.agent !== "string" || !decision.agent.trim()) return null;
+  if (typeof decision.repo !== "string" || path2.resolve(decision.repo) !== path2.resolve(gitRoot())) return null;
+  if (typeof decision.ts !== "number" || Date.now() - decision.ts > STATE_TTL_MS) return null;
+  return decision.agent;
+}
+var UNROUTED_NOTE = "no specialist agent resolved for this task \u2014 run /promper to route it, or pass --agent explicitly. This brief was left untouched: with no role or toolkit to add, a generic skeleton would only dilute it.";
+function unroutedSkeleton(task) {
+  return `<role>
+[ROLE \u2014 unrouted: no specialist agent could be resolved for this task]
+</role>
+
+<context>
+No routing decision is available yet \u2014 this brief was generated deterministically, without a resolved specialist agent.
+</context>
+
+<instructions>
+1. Complete the task below.
+2. If any requirement is ambiguous or underspecified, say so rather than guessing.
+</instructions>
+
+<constraints>
+- ${HALLUCINATION_GUARD}
+</constraints>
+
+<output_format>
+Match whatever format the task implies; default to clear prose if none is implied.
+</output_format>
+
+[TASK]
+${task}
+`;
+}
+function namedAgentBrief(task, toolkitBlock) {
+  return `<context>
+Role is already established by the spawned agent \u2014 do not restate or re-introduce a persona.
+</context>
+
+<instructions>
+1. Complete the task below using your existing expertise and toolkit.
+2. If any requirement is ambiguous or underspecified, say so rather than guessing.
+</instructions>
+${toolkitBlock}
+<constraints>
+- ${HALLUCINATION_GUARD}
+</constraints>
+
+[TASK]
+${task}
+`;
+}
+async function buildBrief(opts) {
+  if (opts.subagentType && opts.subagentType !== "general-purpose") {
+    const lookupName = opts.subagentType.includes(":") ? opts.subagentType.slice(opts.subagentType.indexOf(":") + 1) : opts.subagentType;
+    const resolved = await resolveViaMap(opts.mapDir, lookupName) ?? await resolveViaWalk(await effectiveRoots(opts.mapDir), lookupName);
+    const toolkitBlock = resolved ? (await loadPluginToolkit(resolved)).block : "";
+    const noop = toolkitBlock === "";
+    return {
+      row: "named-agent",
+      agent: opts.subagentType,
+      plugin: resolved?.plugin ?? null,
+      source: resolved?.absPath ?? null,
+      prompt: namedAgentBrief(opts.task, toolkitBlock),
+      noop,
+      note: noop ? `no toolkit found for "${opts.subagentType}" \u2014 brief left untouched.` : null
+    };
+  }
+  const name = opts.agent ?? await persistedAgent(opts.statePath);
+  if (name) {
+    const result = await hydrateAgent(name, opts.task, { mapDir: opts.mapDir });
+    return {
+      row: "hydrated",
+      agent: result.agent,
+      plugin: result.plugin,
+      source: result.source,
+      prompt: result.prompt,
+      noop: false,
+      note: null
+    };
+  }
+  return {
+    row: "unrouted",
+    agent: null,
+    plugin: null,
+    source: null,
+    prompt: unroutedSkeleton(opts.task),
+    noop: true,
+    note: UNROUTED_NOTE
+  };
+}
+async function runBrief(argv) {
   const opts = parseArgs(argv);
-  const result = await hydrateAgent(opts.agent, opts.task, { mapDir: opts.mapDir, templatePath: opts.templatePath });
+  const result = await buildBrief(opts);
   if (opts.json) {
     console.log(JSON.stringify(result, null, 2));
     return;
   }
+  if (result.note) console.error(`note: ${result.note}`);
   console.log(result.prompt);
 }
 export {
-  effectiveRoots,
-  hydrateAgent,
-  listNames,
-  loadPluginToolkit,
-  personaBody,
-  resolveViaMap,
-  resolveViaWalk,
-  runHydrate
+  buildBrief,
+  runBrief
 };

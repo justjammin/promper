@@ -2,10 +2,25 @@
  * scan.ts — `promper scan`: deterministically build promper's lean routing map.
  *
  * Output layout (default ~/.invoker/map/):
- *   index.json     { "version": 1, "domains": { "<domain>": ["<agent-name>", ...] } }
- *   <domain>.json  [ { "name", "description", "file", "model"? }, ... ]
+ *   index.json     { "version": 1, "roots"?: [...], "domains": { "<domain>": ["<agent-name>", ...] } }
+ *   <domain>.json  [ { "name", "description", "file", "model"?, "plugin"? }, ... ]
+ *   toolkits.json  { "<plugin>": { "skills": [{name,description,file}], "commands": [...] } }
+ *                  — keyed by PLUGIN (not domain: a domain can span several plugins, and
+ *                  skills/commands belong to the plugin). Description-matchable, for routing
+ *                  suggestions (SKILL.md Step 4b/5) — distinct from hydrate.ts's toolkit
+ *                  listing, which is name-only and read live at spawn time.
  *
  * Zero LLM. Ported from invokerai/agent_invoker/agent_map.py + domains.py.
+ *
+ * Three agent sources, in this scan order (earlier sources win name collisions):
+ *   1. `--plugins <root>` — wshobson-style marketplaces: `<root>/plugins/<plugin>/agents/*.md`.
+ *      Entries carry a `plugin` field; persona fetch also lists that plugin's skills/+commands/.
+ *   2. `--categories <root>` — category-flat agent repos: `<root>/<category>/*.md`, no nested
+ *      `agents/` folder and no per-category toolkit (e.g. awesome-claude-code-subagents,
+ *      agency-agents). No `plugin` field.
+ *   3. Flat agent directories (`~/.claude/agents`, `--dir <path>`, ...) — scanDirs().
+ * `--plugins` and `--categories` roots are unioned into the same `roots` array in index.json;
+ * relative `file` paths from either source resolve against it identically.
  *
  * Merge rules:
  *   - Existing agent→domain assignments in index.json are authoritative:
@@ -47,6 +62,7 @@ interface ScannedAgent {
 interface ScanOptions {
   extraDirs: string[];
   pluginRoots: string[];
+  categoryRoots: string[];
   noDefaults: boolean;
   check: boolean;
   legacy: boolean;
@@ -60,6 +76,8 @@ interface ExistingMap {
   entries: Map<string, PieceEntry>;
   /** previous domain list (for stale-piece cleanup) */
   domains: string[];
+  /** roots previously recorded in index.json (persist across scans that don't repeat every flag) */
+  roots: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -70,6 +88,7 @@ function parseArgs(argv: string[]): ScanOptions {
   const opts: ScanOptions = {
     extraDirs: [],
     pluginRoots: [],
+    categoryRoots: [],
     noDefaults: false,
     check: false,
     legacy: false,
@@ -88,6 +107,12 @@ function parseArgs(argv: string[]): ScanOptions {
         const value = argv[++i];
         if (!value) throw new Error("--plugins requires a marketplace root path");
         opts.pluginRoots.push(value);
+        break;
+      }
+      case "--categories": {
+        const value = argv[++i];
+        if (!value) throw new Error("--categories requires a repo root path");
+        opts.categoryRoots.push(value);
         break;
       }
       case "--out": {
@@ -244,6 +269,186 @@ async function scanPluginRoots(roots: string[], agents: Map<string, ScannedAgent
   }
 }
 
+/**
+ * Scan category-flat agent repos: `<root>/<category>/*.md`, no nested `agents/` folder and no
+ * per-category toolkit (unlike the wshobson marketplace layout). E.g. awesome-claude-code-subagents
+ * (`categories/<NN-name>/*.md`) and agency-agents (`<domain>/*.md`).
+ *
+ * Map key is always the file stem, never the frontmatter `name` — these repos' frontmatter
+ * names are inconsistent (kebab-case matching the stem in one repo, free-text display labels
+ * like "Software Architect" that collide across categories in another), while filenames are
+ * the actually-unique identifiers.
+ */
+async function scanCategoryRoots(roots: string[], agents: Map<string, ScannedAgent>): Promise<void> {
+  for (const root of roots) {
+    let categoryNames: string[];
+    try {
+      categoryNames = await fs.readdir(root);
+    } catch {
+      continue;
+    }
+    categoryNames.sort();
+    for (const category of categoryNames) {
+      if (category.startsWith(".")) continue;
+      const categoryDir = path.join(root, category);
+      try {
+        if (!(await fs.stat(categoryDir)).isDirectory()) continue;
+      } catch {
+        continue;
+      }
+
+      let fileNames: string[];
+      try {
+        fileNames = await fs.readdir(categoryDir);
+      } catch {
+        continue;
+      }
+      fileNames.sort();
+      for (const fileName of fileNames) {
+        if (!fileName.endsWith(".md")) continue;
+        const fullPath = path.join(categoryDir, fileName);
+        let text: string;
+        try {
+          const stat = await fs.stat(fullPath);
+          if (!stat.isFile()) continue;
+          text = await fs.readFile(fullPath, "utf8");
+        } catch {
+          continue;
+        }
+        const fm = parseFrontmatter(text);
+        if (fm === null) continue; // e.g. category README.md — no frontmatter, skipped naturally
+
+        const stem = path.basename(fileName, ".md");
+        if (agents.has(stem)) continue;
+
+        const description = flattenDescription(fm["description"]);
+        const modelRaw = fm["model"];
+        const model = typeof modelRaw === "string" && modelRaw.trim() ? modelRaw.trim() : undefined;
+
+        const agent: ScannedAgent = {
+          name: stem,
+          description,
+          file: path.relative(root, fullPath),
+          classifyName: stem,
+          tools: normalizeTools(fm["tools"]),
+          hasDescription: description.length > 0,
+        };
+        if (model !== undefined) agent.model = model;
+        agents.set(stem, agent);
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Toolkit scanning (plugin skills/ + commands/, keyed by plugin — not domain)
+// ---------------------------------------------------------------------------
+
+interface ToolkitEntry {
+  name: string;
+  description: string;
+  file: string;
+}
+
+interface PluginToolkitData {
+  skills: ToolkitEntry[];
+  commands: ToolkitEntry[];
+}
+
+async function scanSkillDirs(skillsDir: string, root: string): Promise<ToolkitEntry[]> {
+  let dirNames: string[];
+  try {
+    dirNames = await fs.readdir(skillsDir);
+  } catch {
+    return [];
+  }
+  dirNames.sort();
+  const entries: ToolkitEntry[] = [];
+  for (const dirName of dirNames) {
+    const skillFile = path.join(skillsDir, dirName, "SKILL.md");
+    let text: string;
+    try {
+      const stat = await fs.stat(skillFile);
+      if (!stat.isFile()) continue;
+      text = await fs.readFile(skillFile, "utf8");
+    } catch {
+      continue;
+    }
+    const fm = parseFrontmatter(text);
+    if (fm === null) continue;
+    const name = (typeof fm["name"] === "string" && fm["name"].trim()) || dirName;
+    entries.push({ name, description: flattenDescription(fm["description"]), file: path.relative(root, skillFile) });
+  }
+  entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  return entries;
+}
+
+async function scanCommandFiles(commandsDir: string, root: string): Promise<ToolkitEntry[]> {
+  let fileNames: string[];
+  try {
+    fileNames = await fs.readdir(commandsDir);
+  } catch {
+    return [];
+  }
+  fileNames.sort();
+  const entries: ToolkitEntry[] = [];
+  for (const fileName of fileNames) {
+    if (!fileName.endsWith(".md")) continue;
+    const fullPath = path.join(commandsDir, fileName);
+    let text: string;
+    try {
+      const stat = await fs.stat(fullPath);
+      if (!stat.isFile()) continue;
+      text = await fs.readFile(fullPath, "utf8");
+    } catch {
+      continue;
+    }
+    const fm = parseFrontmatter(text);
+    if (fm === null) continue;
+    // Commands have no frontmatter `name` — the slash-command name IS the file stem.
+    const stem = path.basename(fileName, ".md");
+    entries.push({ name: stem, description: flattenDescription(fm["description"]), file: path.relative(root, fullPath) });
+  }
+  entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  return entries;
+}
+
+/**
+ * Index each marketplace root's plugins/<plugin>/{skills,commands}/ once per plugin, regardless
+ * of how many domains that plugin's agents land in. Safe to pass category-flat roots too — a
+ * missing plugins/ dir just yields nothing (try/catch), so this can reuse the same root union
+ * the agent-reconciliation pass uses without needing a separate plugin-vs-category root registry.
+ */
+async function scanToolkits(roots: string[]): Promise<Map<string, PluginToolkitData>> {
+  const toolkits = new Map<string, PluginToolkitData>();
+  for (const root of roots) {
+    const pluginsDir = path.join(root, "plugins");
+    let pluginNames: string[];
+    try {
+      pluginNames = await fs.readdir(pluginsDir);
+    } catch {
+      continue;
+    }
+    pluginNames.sort();
+    for (const plugin of pluginNames) {
+      if (toolkits.has(plugin)) continue; // first root wins, same collision rule as agents
+      const skills = await scanSkillDirs(path.join(pluginsDir, plugin, "skills"), root);
+      const commands = await scanCommandFiles(path.join(pluginsDir, plugin, "commands"), root);
+      if (skills.length > 0 || commands.length > 0) toolkits.set(plugin, { skills, commands });
+    }
+  }
+  return toolkits;
+}
+
+function serializeToolkits(toolkits: Map<string, PluginToolkitData>): string {
+  const out: Record<string, PluginToolkitData> = {};
+  for (const plugin of [...toolkits.keys()].sort()) {
+    const data = toolkits.get(plugin);
+    if (data) out[plugin] = data;
+  }
+  return JSON.stringify(out, null, 2) + "\n";
+}
+
 // ---------------------------------------------------------------------------
 // Existing map loading
 // ---------------------------------------------------------------------------
@@ -264,6 +469,8 @@ async function loadExisting(outDir: string): Promise<ExistingMap | null> {
   if (typeof parsed !== "object" || parsed === null) return null;
   const domainsRaw = (parsed as Record<string, unknown>)["domains"];
   if (typeof domainsRaw !== "object" || domainsRaw === null) return null;
+  const rootsRaw = (parsed as Record<string, unknown>)["roots"];
+  const roots = Array.isArray(rootsRaw) ? rootsRaw.filter((r): r is string => typeof r === "string") : [];
 
   const assignments = new Map<string, string>();
   const entries = new Map<string, PieceEntry>();
@@ -292,7 +499,29 @@ async function loadExisting(outDir: string): Promise<ExistingMap | null> {
       entries.set(entry.name, rest as PieceEntry);
     }
   }
-  return { assignments, entries, domains };
+  return { assignments, entries, domains, roots };
+}
+
+/** Does a piece entry's file still exist? Absolute paths are checked directly; relative paths
+ * are tried against each known root (same resolution order hydrate.ts uses). */
+async function fileStillExists(file: string, roots: string[]): Promise<boolean> {
+  if (path.isAbsolute(file)) {
+    try {
+      await fs.access(file);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  for (const root of roots) {
+    try {
+      await fs.access(path.join(root, file));
+      return true;
+    } catch {
+      /* try next root */
+    }
+  }
+  return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -397,16 +626,16 @@ function merge(scanned: Map<string, ScannedAgent>, existing: ExistingMap | null)
   };
 }
 
-function serializeIndex(buckets: Map<string, PieceEntry[]>, pluginRoots: string[]): string {
+function serializeIndex(buckets: Map<string, PieceEntry[]>, roots: string[]): string {
   const domains: Record<string, string[]> = {};
   for (const domain of [...buckets.keys()].sort()) {
     const bucket = buckets.get(domain);
     if (bucket) domains[domain] = bucket.map((e) => e.name);
   }
   const out: Record<string, unknown> = { version: MAP_VERSION };
-  // Persona fetch resolves plugin agents' relative `file` paths (and the plugin's
-  // skills/ + commands/) against these roots.
-  if (pluginRoots.length > 0) out["roots"] = pluginRoots.map((r) => path.resolve(r)).sort();
+  // Persona fetch resolves any entry's relative `file` path against these roots — plugin-root
+  // entries also fetch their plugin's skills/ + commands/ from the same root.
+  if (roots.length > 0) out["roots"] = [...new Set(roots.map((r) => path.resolve(r)))].sort();
   out["domains"] = domains;
   return JSON.stringify(out, null, 2) + "\n";
 }
@@ -471,9 +700,36 @@ export async function runScan(argv: string[]): Promise<void> {
   const dirs = [...(opts.noDefaults ? [] : defaultScanDirs()), ...opts.extraDirs];
 
   const scanned = new Map<string, ScannedAgent>();
-  await scanPluginRoots(opts.pluginRoots, scanned); // plugin roots win name collisions
+  await scanPluginRoots(opts.pluginRoots, scanned); // plugin + category roots win name collisions
+  await scanCategoryRoots(opts.categoryRoots, scanned);
   await scanDirs(dirs, scanned);
   const existing = await loadExisting(opts.outDir);
+  const allRoots = [...new Set([...opts.pluginRoots, ...opts.categoryRoots, ...(existing?.roots ?? [])])];
+
+  // An existing entry not covered by this run's scan (e.g. a `bootstrap()` re-scan that only
+  // passes --plugins, not every --categories flag ever used) is dropped only if its file has
+  // genuinely vanished — never merely because this invocation didn't repeat every historical
+  // root flag. Revive it into `scanned` so merge()'s existing-assignment check keeps it; the
+  // piece entry (not this placeholder) still supplies its description/file/model/plugin.
+  if (existing) {
+    for (const name of existing.assignments.keys()) {
+      if (scanned.has(name)) continue;
+      const entry = existing.entries.get(name);
+      if (!entry || !(await fileStillExists(entry.file, allRoots))) continue;
+      const revived: ScannedAgent = {
+        name,
+        description: entry.description,
+        file: entry.file,
+        classifyName: name,
+        tools: [],
+        hasDescription: entry.description.length > 0,
+      };
+      if (typeof entry.plugin === "string") revived.plugin = entry.plugin;
+      if (entry.model !== undefined) revived.model = entry.model;
+      scanned.set(name, revived);
+    }
+  }
+
   const result = merge(scanned, existing);
 
   const changedFiles: string[] = [];
@@ -483,7 +739,7 @@ export async function runScan(argv: string[]): Promise<void> {
   if (
     await writeIfChanged(
       path.join(opts.outDir, "index.json"),
-      serializeIndex(result.buckets, opts.pluginRoots),
+      serializeIndex(result.buckets, allRoots),
       opts.check,
     )
   ) {
@@ -498,6 +754,12 @@ export async function runScan(argv: string[]): Promise<void> {
     if (await writeIfChanged(path.join(opts.outDir, pieceFile), serializePiece(bucket), opts.check)) {
       changedFiles.push(pieceFile);
     }
+  }
+
+  // toolkits.json (plugin skills/ + commands/, keyed by plugin)
+  const toolkits = await scanToolkits(allRoots);
+  if (await writeIfChanged(path.join(opts.outDir, "toolkits.json"), serializeToolkits(toolkits), opts.check)) {
+    changedFiles.push("toolkits.json");
   }
 
   // stale pieces (domain emptied out entirely)
