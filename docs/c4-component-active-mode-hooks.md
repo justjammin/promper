@@ -3,24 +3,26 @@
 ## Overview
 
 - **Name**: Active Mode Hooks
-- **Description**: Three Claude Code lifecycle hook scripts (`hooks/*.mjs`) that make promper's agent-routing and role-inheritance behavior fire automatically — on session start, on every user prompt, and on every subagent spawn — instead of requiring the user to manually invoke `/promper`.
+- **Description**: Five Claude Code lifecycle hook scripts (`hooks/*.mjs`) that make promper's agent-routing and role-inheritance behavior fire automatically — on session start, on every user prompt, on every subagent spawn, on every repo-file edit, and at session end — instead of requiring the user to manually invoke `/promper`.
 - **Type**: Claude Code plugin hook layer
 - **Technology**: Node.js ESM (v18+), zero npm runtime dependencies by design (Node built-ins only: `node:fs`, `node:os`, `node:path`, `node:url`, `process`)
 
 ## Purpose
 
-This component is promper's "active mode": the mechanism that makes the agent-walk happen without the user remembering to type `/promper`. Three Claude Code hook events — `SessionStart`, `UserPromptSubmit`, `PreToolUse` — are wired to deterministic Node scripts that inject orchestration context, nudge routing decisions, and rewrite subagent spawn prompts with inherited role/persona context.
+This component is promper's "active mode": the mechanism that makes the agent-walk happen without the user remembering to type `/promper`. Four Claude Code hook events — `SessionStart`, `UserPromptSubmit`, `PreToolUse` (two matchers), `SessionEnd` — are wired to deterministic Node scripts that inject orchestration context, nudge routing decisions, rewrite subagent spawn prompts with inherited role/persona context, gate repo edits behind a fresh routing decision, and re-arm that gate at session end.
 
 It also makes the plugin self-contained. The `SessionStart` hook (`inject-contract.mjs`) injects `hooks/contract.md` as standing session context, replacing orchestration rules a user would otherwise have to hand-maintain in their personal `~/.claude/CLAUDE.md`. Installing the plugin is sufficient — no manual CLAUDE.md edits required to get promper's routing discipline.
 
-All three hooks are deterministic (zero LLM calls). They are thin orchestration glue: hook lifecycle plumbing (stdin/stdout JSON, env checks, fail-safe passthrough) on one side, and calls into the compiled `promper CLI Engine` bundles (`dist/brief.js`, `dist/gate.js`) on the other, via runtime `import()` rather than subprocess spawn.
+All five hooks are deterministic (zero LLM calls). They are thin orchestration glue: hook lifecycle plumbing (stdin/stdout JSON, env checks, fail-safe passthrough) on one side, and — for the gate and spawn hooks — calls into the compiled `promper CLI Engine` bundles (`dist/brief.js`, `dist/gate.js`) via runtime `import()` rather than subprocess spawn. `contract-gate.mjs` and `clear-decision.mjs` are self-contained (Node built-ins only, no `dist/` import).
 
 ## Software Features
 
 - **SessionStart contract injection**: On session start/resume/compact/clear, reads `hooks/contract.md` and injects it as `additionalContext`, embedding promper's routing/execution-decision/edit-gate rules into every session without the user maintaining a personal CLAUDE.md copy.
 - **UserPromptSubmit deep-dive/follow-up gate**: On every user message, classifies the prompt as a new substantial task ("deep") vs. a continuation ("follow-up") using `dist/gate.js`. On "deep", injects a NUDGE instructing the user/model to run `/promper` agent-walk and record the routing decision; on "follow-up", stays silent — never nags on every turn.
 - **PreToolUse role-bearing spawn-brief rewrite**: On every `Agent`/`Task` tool invocation, intercepts the spawn prompt and rewrites it via `dist/brief.js` (`buildBrief()`) to embed the previously-recorded role/domain context, so the subagent inherits a specialist persona instead of a bare task string.
-- **`PROMPER_ACTIVE` off-switch**: Setting `PROMPER_ACTIVE=0` disables all three hooks uniformly — every hook passes through with zero mutation, restoring stock Claude Code behavior.
+- **PreToolUse contract gate**: On every `Edit`/`Write`/`MultiEdit`/`NotebookEdit` targeting a file inside the active repo, denies the edit until a fresh routing decision exists at `~/.invoker/state/promper-decision.json` (any verdict, same repo root, 60-min TTL). The deny reason re-delivers the contract summary and the exact JSON to record. Out-of-repo writes (including the state file itself) are never gated; every unexpected condition fails open.
+- **SessionEnd gate re-arm**: Clears this repo's routing decision when the session ends, so the next session's first repo edit re-runs the agent-walk. Repo-scoped — never wipes another repo's live decision.
+- **`PROMPER_ACTIVE` off-switch**: Setting `PROMPER_ACTIVE=0` disables all five hooks uniformly — every hook passes through with zero mutation, restoring stock Claude Code behavior.
 - **`PROMPER_DEBUG_LOG` tracing**: Setting `PROMPER_DEBUG_LOG=<path>` makes `enrich-spawn.mjs` append one JSON line per hook decision (pass-through reason, rewrite outcome, brief failure, etc.) for auditing which spawns were engineered and why. Zero cost when unset.
 
 ## Code Elements
@@ -28,10 +30,12 @@ All three hooks are deterministic (zero LLM calls). They are thin orchestration 
 This component contains the following code-level elements, documented in full at [c4-code-hooks.md](./c4-code-hooks.md):
 
 - `hooks/inject-contract.mjs` — SessionStart hook; reads and injects `contract.md`
-- `hooks/gate-prompt.mjs` — UserPromptSubmit hook; classifies deep-dive vs. follow-up, injects NUDGE, no state write itself (state is written by the user/model per the NUDGE instructions)
-- `hooks/enrich-spawn.mjs` — PreToolUse hook; reads recorded routing decision, rewrites spawn prompt via `buildBrief()`
-- `hooks/hooks.json` — hook registration manifest (event → command mapping, `PreToolUse` matcher `"Agent|Task"`)
-- `hooks/contract.md` — the standing orchestration contract text injected by `inject-contract.mjs`
+- `hooks/gate-prompt.mjs` — UserPromptSubmit hook; classifies deep-dive vs. follow-up, injects NUDGE + re-injects `contract.md` on deep, no state write itself (state is written by the user/model per the NUDGE instructions)
+- `hooks/enrich-spawn.mjs` — PreToolUse hook (matcher `"Agent|Task"`); reads recorded routing decision, rewrites spawn prompt via `buildBrief()`
+- `hooks/contract-gate.mjs` — PreToolUse hook (matcher `"Edit|Write|MultiEdit|NotebookEdit"`); denies repo-file edits until a fresh routing decision exists
+- `hooks/clear-decision.mjs` — SessionEnd hook; clears this repo's routing decision so the gate re-arms next session
+- `hooks/hooks.json` — hook registration manifest (event → command mapping, per-entry matchers)
+- `hooks/contract.md` — the standing orchestration contract text injected by `inject-contract.mjs` (and re-injected by `gate-prompt.mjs` on deep prompts)
 
 ## Interfaces
 

@@ -23,18 +23,20 @@ Claude-XML skeleton, and the Role-Inheritance Contract). All behavior below depe
 
 > **Hard dependency:** the [wshobson/agents](https://github.com/wshobson/agents) marketplace
 > is promper's role source (registered as `claude-code-workflows`; bootstrap via
-> `promper bootstrap`, which `/promper:setup` runs). promper never loads invokerai skills and
+> `promper bootstrap`, which `/promper:setup` runs). promper
 > never reads any map file whole — it walks the lean map at `~/.invoker/map/` built from that
 > marketplace.
 
 > **This is the manual path.** `/promper` is the deliberate, plan-first invocation — presents
-> prompts, spawns nothing. promper also runs *automatically* via three hooks (`hooks/hooks.json`)
+> prompts, spawns nothing. promper also runs *automatically* via five hooks (`hooks/hooks.json`)
 > that reuse this same routing/inheritance logic without duplicating it: a `SessionStart` hook
 > injects the standing orchestration contract, a `UserPromptSubmit` hook nudges this agent-walk
-> on a new substantial task (silent on a follow-up), and a `PreToolUse` hook deterministically
-> rewrites a subagent's spawn brief once this skill has recorded a routed agent (Step 7.5). See
-> the README's "Active mode" section for the full picture; the routing/inheritance rules below
-> are the single source of truth both paths defer to.
+> on a new substantial task (silent on a follow-up) and re-injects the contract, a `PreToolUse`
+> hook deterministically rewrites a subagent's spawn brief once this skill has recorded a routed
+> agent (Step 7.5), a second `PreToolUse` hook denies repo-file edits until that decision is
+> recorded (fresh, same repo), and a `SessionEnd` hook clears the decision so the gate re-arms.
+> See the README's "Active mode" section for the full picture; the routing/inheritance rules
+> below are the single source of truth both paths defer to.
 
 ---
 
@@ -83,9 +85,9 @@ execution start (`bd update <id> --status running`), close on completion
 (`bd close <id> --reason "Completed by <agent>"`), note on failure, and prune the whole batch
 at run end (`bd delete <id>`) so the store stays bounded. Every bd failure is non-blocking.
 
-**4b. Route each node.** Discover the role-source agent yourself. Never load an invokerai
-skill; never read any map file whole. Work down the tiers; stop at the first that yields
-candidates. `--agent=<name>` skips discovery entirely.
+**4b. Route each node.** Discover the role-source agent yourself. Never read any map file
+whole. Work down the tiers; stop at the first that yields candidates. `--agent=<name>` skips
+discovery entirely.
 
 - **Tier 1 — in-session agent list (0 tokens).** If your context already shows a list of
   available agents/subagent types with descriptions (e.g. the Agent tool's agent-type roster),
@@ -95,13 +97,7 @@ candidates. `--agent=<name>` skips discovery entirely.
 - **Tier 2 — lean map pieces (~700 tokens typical).** Read `~/.invoker/map/index.json`
   (domains → agent names, ~1–2KB). Pick the 1–2 domains matching the node's `action`, then
   read those `~/.invoker/map/<domain>.json` pieces and walk entries one by one until confident.
-- **Tier 3 — legacy map, jq slices only.** Pieces absent but `~/.invoker/agent-map.json`
-  exists → size-gated jq:
-  `jq -r '.domains | keys | join(", ")'` → for a matching domain,
-  `jq '.domains["<d>"] | length'`; **≤15 agents:** `jq '[.domains["<d>"][] | {name, description}]'`;
-  **>15:** names first (`jq -r '[.domains["<d>"][].name] | join(", ")'`), shortlist 3–5, then
-  `jq '[.domains["<d>"][] | select(.name | IN("a","b","c")) | {name, description}]'`.
-- **Tier 4 — nothing available.** The hard dependency is missing — tell the user to run
+- **Tier 3 — nothing available.** The hard dependency is missing — tell the user to run
   `promper bootstrap` (installs the wshobson/agents marketplace and builds the map), proceed
   with a generic expert role for the inferred domain, and note the gap.
 

@@ -10,7 +10,7 @@
  *                  suggestions (SKILL.md Step 4b/5) — distinct from hydrate.ts's toolkit
  *                  listing, which is name-only and read live at spawn time.
  *
- * Zero LLM. Ported from invokerai/agent_invoker/agent_map.py + domains.py.
+ * Zero LLM.
  *
  * Three agent sources, in this scan order (earlier sources win name collisions):
  *   1. `--plugins <root>` — wshobson-style marketplaces: `<root>/plugins/<plugin>/agents/*.md`.
@@ -65,7 +65,6 @@ interface ScanOptions {
   categoryRoots: string[];
   noDefaults: boolean;
   check: boolean;
-  legacy: boolean;
   outDir: string;
 }
 
@@ -91,7 +90,6 @@ function parseArgs(argv: string[]): ScanOptions {
     categoryRoots: [],
     noDefaults: false,
     check: false,
-    legacy: false,
     outDir: path.join(homedir(), ".invoker", "map"),
   };
   for (let i = 0; i < argv.length; i++) {
@@ -126,9 +124,6 @@ function parseArgs(argv: string[]): ScanOptions {
         break;
       case "--no-defaults":
         opts.noDefaults = true;
-        break;
-      case "--legacy":
-        opts.legacy = true;
         break;
       default:
         throw new Error(`unknown flag: ${arg}`);
@@ -644,30 +639,6 @@ function serializePiece(entries: PieceEntry[]): string {
   return JSON.stringify(entries, null, 2) + "\n";
 }
 
-function serializeLegacy(
-  buckets: Map<string, PieceEntry[]>,
-  scanned: Map<string, ScannedAgent>,
-): string {
-  const domains: Record<string, Record<string, unknown>[]> = {};
-  for (const domain of [...buckets.keys()].sort()) {
-    const bucket = buckets.get(domain);
-    if (!bucket) continue;
-    domains[domain] = bucket.map((e) => {
-      const source = scanned.get(e.name);
-      const legacy: Record<string, unknown> = {
-        name: e.name,
-        file: e.file,
-        description: e.description,
-      };
-      if (source && source.tools.length > 0) legacy["tools"] = source.tools;
-      const model = e.model ?? source?.model;
-      if (model !== undefined) legacy["model"] = model;
-      return legacy;
-    });
-  }
-  return JSON.stringify({ version: MAP_VERSION, domains }, null, 2) + "\n";
-}
-
 // ---------------------------------------------------------------------------
 // Writing
 // ---------------------------------------------------------------------------
@@ -769,14 +740,6 @@ export async function runScan(argv: string[]): Promise<void> {
     if ((await readIfExists(piecePath)) === null) continue;
     if (!opts.check) await fs.unlink(piecePath);
     staleRemoved.push(`${domain}.json`);
-  }
-
-  // legacy map
-  if (opts.legacy) {
-    const legacyPath = path.join(homedir(), ".invoker", "agent-map.json");
-    if (await writeIfChanged(legacyPath, serializeLegacy(result.buckets, scanned), opts.check)) {
-      changedFiles.push(legacyPath);
-    }
   }
 
   // ------------------------------------------------------------------------

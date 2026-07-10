@@ -1,6 +1,5 @@
 /**
- * domains.ts — classification tables ported from the Python reference
- * (invokerai/agent_invoker/domains.py and registry/agents.json).
+ * domains.ts — classification tables for agent → domain routing.
  *
  * Deterministic data only — no I/O, no LLM.
  */
