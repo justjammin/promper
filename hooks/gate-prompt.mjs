@@ -7,6 +7,7 @@
 //
 // Off switch: PROMPER_ACTIVE=0 disables this hook (pass-through, no injection).
 
+import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -51,10 +52,19 @@ async function main() {
 
   if (verdict !== "deep") return passThrough();
 
+  // Re-inject the full contract alongside the nudge: the SessionStart copy decays as context
+  // grows (or is summarized away), and a deep prompt is exactly when it must be in reach.
+  let contract = "";
+  try {
+    contract = readFileSync(join(HOOK_DIR, "contract.md"), "utf8").trim();
+  } catch {
+    /* contract.md missing — the nudge alone still stands */
+  }
+
   const output = {
     hookSpecificOutput: {
       hookEventName: "UserPromptSubmit",
-      additionalContext: NUDGE,
+      additionalContext: contract ? `${NUDGE}\n\n${contract}` : NUDGE,
     },
   };
   process.stdout.write(JSON.stringify(output));

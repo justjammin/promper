@@ -28,13 +28,15 @@ Claude-XML skeleton, and the Role-Inheritance Contract). All behavior below depe
 > marketplace.
 
 > **This is the manual path.** `/promper` is the deliberate, plan-first invocation — presents
-> prompts, spawns nothing. promper also runs *automatically* via three hooks (`hooks/hooks.json`)
+> prompts, spawns nothing. promper also runs *automatically* via five hooks (`hooks/hooks.json`)
 > that reuse this same routing/inheritance logic without duplicating it: a `SessionStart` hook
 > injects the standing orchestration contract, a `UserPromptSubmit` hook nudges this agent-walk
-> on a new substantial task (silent on a follow-up), and a `PreToolUse` hook deterministically
-> rewrites a subagent's spawn brief once this skill has recorded a routed agent (Step 7.5). See
-> the README's "Active mode" section for the full picture; the routing/inheritance rules below
-> are the single source of truth both paths defer to.
+> on a new substantial task (silent on a follow-up) and re-injects the contract, a `PreToolUse`
+> hook deterministically rewrites a subagent's spawn brief once this skill has recorded a routed
+> agent (Step 7.5), a second `PreToolUse` hook denies repo-file edits until that decision is
+> recorded (fresh, same repo), and a `SessionEnd` hook clears the decision so the gate re-arms.
+> See the README's "Active mode" section for the full picture; the routing/inheritance rules
+> below are the single source of truth both paths defer to.
 
 ---
 

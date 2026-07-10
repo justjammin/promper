@@ -86,14 +86,16 @@ promper/
 ## Active mode
 
 Everything above is the **manual** path — you type `/promper` and it engineers a prompt,
-plan-first, zero spawns. promper also runs **automatically**, via three hooks that ship with
+plan-first, zero spawns. promper also runs **automatically**, via five hooks that ship with
 the plugin (`hooks/hooks.json`), so the agent-walk happens without you remembering to invoke it:
 
 | Hook | Event | What it does |
 |---|---|---|
 | `inject-contract.mjs` | `SessionStart` | Injects the routing + execution-decision + edit-gate contract as standing context — see `hooks/contract.md`. Runs every session start (startup/resume/compact/clear). |
-| `gate-prompt.mjs` | `UserPromptSubmit` | Deterministic classifier (`promper gate`, no LLM): a session opener or a new substantial task nudges the model to run the agent-walk and record the routed agent; an ordinary follow-up ("also...", "what about...", a short reply) stays silent. Biased toward under-triggering — it never nags. |
+| `gate-prompt.mjs` | `UserPromptSubmit` | Deterministic classifier (`promper gate`, no LLM): a session opener or a new substantial task nudges the model to run the agent-walk and record the routed agent, and re-injects the full contract (the SessionStart copy decays as context grows); an ordinary follow-up ("also...", "what about...", a short reply) stays silent. Biased toward under-triggering — it never nags. |
 | `enrich-spawn.mjs` | `PreToolUse` (matcher `Agent\|Task`) | Deterministic role-bearing brief (`promper brief`, no LLM): rewrites a subagent's prompt **only when it adds real value** — a full persona (when a routed agent name is known) or a toolkit line (for an already-named agent). A spawn with nothing to add is left completely untouched, never wrapped in empty boilerplate. |
+| `contract-gate.mjs` | `PreToolUse` (matcher `Edit\|Write\|MultiEdit\|NotebookEdit`) | The contract's teeth: denies edits to files **inside the active repo** until a fresh routing decision exists (`promper-decision.json`, any verdict, 60-min TTL, same repo root). The denial message re-delivers the contract and the exact JSON to record. Writes outside the repo (including the state file itself) are never gated, so satisfying the gate can't deadlock. Fails open on any error. |
+| `clear-decision.mjs` | `SessionEnd` | Re-arms the gate: clears this repo's routing decision when the session ends, so the next session re-runs the agent-walk before its first repo edit. Repo-scoped — never wipes a decision another repo's session just recorded. |
 
 The hand-off between the nudge and the rewrite is `~/.invoker/state/promper-decision.json`:
 when the agent-walk (Step 7.5 in `skills/promper/SKILL.md`) routes to a specialist, it records
@@ -101,7 +103,7 @@ when the agent-walk (Step 7.5 in `skills/promper/SKILL.md`) routes to a speciali
 `enrich-spawn.mjs` reads it back and inherits that exact role on the next general-purpose spawn
 in the same repo — routing happens once, in the model, and the hooks stay deterministic.
 
-**Off switch:** `PROMPER_ACTIVE=0` disables all three hooks. `/promper`, `/prim`, and
+**Off switch:** `PROMPER_ACTIVE=0` disables all five hooks. `/promper`, `/prim`, and
 `/promper:setup` are unaffected either way — they stay available as the manual override.
 
 **Caveats:**
