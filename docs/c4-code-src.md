@@ -16,7 +16,7 @@
 - **Description**: Deterministically builds promper's lean routing map from agent marketplaces. Scans plugin roots, category-flat repos, and flat agent directories; classifies new agents into domains; outputs index.json, domain-specific piece files, and toolkits.json.
 - **Location**: src/scan.ts
 - **Main Export**: `runScan(argv: string[]): Promise<void>` — CLI entry point for map scanning
-  - **Parameters**: argv — command-line arguments (--dir, --plugins, --categories, --out, --check, --no-defaults, --legacy)
+  - **Parameters**: argv — command-line arguments (--dir, --plugins, --categories, --out, --check, --no-defaults)
   - **Returns**: Promise<void> — writes or checks map files
   - **Line**: 698
   - **Dependencies**: fs/promises, path, os.homedir(), classify(), frontmatter parsing
@@ -51,7 +51,7 @@
     - **Dependencies**: domains.js (REGISTRY, CATEGORY_PRIORITY)
 
 #### domains.ts
-- **Description**: Classification tables ported from Python reference (invokerai/agent_invoker/domains.py and registry/agents.json). Deterministic data only — no I/O, no LLM.
+- **Description**: Classification tables for agent → domain routing. Deterministic data only — no I/O, no LLM.
 - **Location**: src/domains.ts
 - **Exports** (data tables):
   - `ROLE_DOMAIN: Readonly<Record<string, string>>` — exact agent-name → domain table (80 entries)
@@ -62,7 +62,7 @@
     - **Line**: 111
 
 #### frontmatter.ts
-- **Description**: Leading `---` YAML block parsing (ported from invokerai/agent_invoker/agent_map.py). Extracts and normalizes frontmatter metadata from Markdown agent files.
+- **Description**: Leading `---` YAML block parsing. Extracts and normalizes frontmatter metadata from Markdown agent files.
 - **Location**: src/frontmatter.ts
 - **Exports**:
   - `parseFrontmatter(text: string): Frontmatter | null` — parse YAML frontmatter block from Markdown
@@ -98,7 +98,7 @@
 | Function | Signature | Location | Purpose |
 |----------|-----------|----------|---------|
 | `runScan` | `(argv: string[]): Promise<void>` | 698 | CLI entry; orchestrates scan → merge → serialize pipeline |
-| `parseArgs` | `(argv: string[]): ScanOptions` | 87 | Parse CLI flags (--dir, --plugins, --categories, --out, --check, --legacy) |
+| `parseArgs` | `(argv: string[]): ScanOptions` | 87 | Parse CLI flags (--dir, --plugins, --categories, --out, --check) |
 | `scanDirs` | `(dirs: string[], agents?: Map<string, ScannedAgent>): Promise<Map<string, ScannedAgent>>` | 155 | Scan flat directories for *.md agent files |
 | `scanPluginRoots` | `(roots: string[], agents: Map<string, ScannedAgent>): Promise<void>` | 211 | Scan wshobson-style plugin marketplaces: `<root>/plugins/<plugin>/agents/*.md` |
 | `scanCategoryRoots` | `(roots: string[], agents: Map<string, ScannedAgent>): Promise<void>` | 282 | Scan category-flat repos: `<root>/<category>/*.md` |
@@ -112,7 +112,6 @@
 | `serializeIndex` | `(buckets: Map<string, PieceEntry[]>, roots: string[]): string` | 629 | Serialize index.json with version + roots + domain lists |
 | `serializePiece` | `(entries: PieceEntry[]): string` | 643 | Serialize domain piece file (domain.json) |
 | `serializeToolkits` | `(toolkits: Map<string, PluginToolkitData>): string` | 443 | Serialize toolkits.json (plugin → skills/commands) |
-| `serializeLegacy` | `(buckets: Map<string, PieceEntry[]>, scanned: Map<string, ScannedAgent>): string` | 647 | Serialize ~/.invoker/agent-map.json (legacy format) |
 | `defaultScanDirs` | `(): string[]` | 144 | Return default scan directories (~/.claude/agents, ./.claude/agents, ~/.codex/agents, ~/.gemini/agents) |
 
 ### hydrate.ts — Agent Resolution & Hydration
@@ -208,7 +207,6 @@ interface ScanOptions {
   categoryRoots: string[];
   noDefaults: boolean;
   check: boolean;
-  legacy: boolean;
   outDir: string;
 }
 
@@ -583,7 +581,7 @@ Hydration template replaces placeholders:
 
 ### 6. Graceful Degradation
 Each module degrades gracefully:
-- **scan.ts**: Missing dirs skipped; corrupt frontmatter ignored; legacy flag optional
+- **scan.ts**: Missing dirs skipped; corrupt frontmatter ignored
 - **hydrate.ts**: Map lookup fails → fallback walk; fallback walk fails → throw (caller catches)
 - **brief.ts**: Row 1 toolkit not found → noop=true (brief left untouched); Row 2 name not resolvable → Row 3 (unrouted skeleton)
 - **gate.ts**: Transcript missing → count=0; prior-turns flag overrides file read
@@ -684,7 +682,6 @@ Each module degrades gracefully:
 - First-occurrence rule: plugin roots > category roots > flat dirs
 - Stale cleanup: agents whose source files vanished are dropped (reported)
 - Domain aliasing: ported classifier domain (backend) resolves to existing (engineering-backend)
-- Legacy format: optional --legacy flag produces ~/.invoker/agent-map.json
 
 ### hydrate.ts
 - O(1) map lookup: exact name or file-stem match

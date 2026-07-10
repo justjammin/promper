@@ -23,7 +23,7 @@ Claude-XML skeleton, and the Role-Inheritance Contract). All behavior below depe
 
 > **Hard dependency:** the [wshobson/agents](https://github.com/wshobson/agents) marketplace
 > is promper's role source (registered as `claude-code-workflows`; bootstrap via
-> `promper bootstrap`, which `/promper:setup` runs). promper never loads invokerai skills and
+> `promper bootstrap`, which `/promper:setup` runs). promper
 > never reads any map file whole — it walks the lean map at `~/.invoker/map/` built from that
 > marketplace.
 
@@ -83,9 +83,9 @@ execution start (`bd update <id> --status running`), close on completion
 (`bd close <id> --reason "Completed by <agent>"`), note on failure, and prune the whole batch
 at run end (`bd delete <id>`) so the store stays bounded. Every bd failure is non-blocking.
 
-**4b. Route each node.** Discover the role-source agent yourself. Never load an invokerai
-skill; never read any map file whole. Work down the tiers; stop at the first that yields
-candidates. `--agent=<name>` skips discovery entirely.
+**4b. Route each node.** Discover the role-source agent yourself. Never read any map file
+whole. Work down the tiers; stop at the first that yields candidates. `--agent=<name>` skips
+discovery entirely.
 
 - **Tier 1 — in-session agent list (0 tokens).** If your context already shows a list of
   available agents/subagent types with descriptions (e.g. the Agent tool's agent-type roster),
@@ -95,13 +95,7 @@ candidates. `--agent=<name>` skips discovery entirely.
 - **Tier 2 — lean map pieces (~700 tokens typical).** Read `~/.invoker/map/index.json`
   (domains → agent names, ~1–2KB). Pick the 1–2 domains matching the node's `action`, then
   read those `~/.invoker/map/<domain>.json` pieces and walk entries one by one until confident.
-- **Tier 3 — legacy map, jq slices only.** Pieces absent but `~/.invoker/agent-map.json`
-  exists → size-gated jq:
-  `jq -r '.domains | keys | join(", ")'` → for a matching domain,
-  `jq '.domains["<d>"] | length'`; **≤15 agents:** `jq '[.domains["<d>"][] | {name, description}]'`;
-  **>15:** names first (`jq -r '[.domains["<d>"][].name] | join(", ")'`), shortlist 3–5, then
-  `jq '[.domains["<d>"][] | select(.name | IN("a","b","c")) | {name, description}]'`.
-- **Tier 4 — nothing available.** The hard dependency is missing — tell the user to run
+- **Tier 3 — nothing available.** The hard dependency is missing — tell the user to run
   `promper bootstrap` (installs the wshobson/agents marketplace and builds the map), proceed
   with a generic expert role for the inferred domain, and note the gap.
 

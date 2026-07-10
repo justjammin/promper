@@ -26,7 +26,7 @@ raw intent
   → engineered prompt(s) + plan     (nothing spawns until you say go)
 ```
 
-**Who does what:** promper *makes* the prompt, *routes* to the agent, and *decides execution* · the agents *are* the roles · prim *guards* them · invokerai (optional) remains for standalone BEADS-tracked orchestration.
+**Who does what:** promper *makes* the prompt, *routes* to the agent, and *decides execution* · the agents *are* the roles · prim *guards* them.
 
 ## /promper
 
@@ -156,7 +156,7 @@ exists — only a genuinely-vanished file gets dropped. Flags: `--check` (dry ru
 `<root>/<category>/*.md`, no nested `agents/` folder — e.g.
 [awesome-claude-code-subagents](https://github.com/VoltAgent/awesome-claude-code-subagents),
 [agency-agents](https://github.com/msitarzewski/agency-agents)) · `--no-defaults` ·
-`--legacy` (also refresh an old invokerai `agent-map.json`) · `--out <path>`. Every
+`--out <path>`. Every
 `--plugins`/`--categories` root also feeds `~/.invoker/map/toolkits.json` — each plugin's
 skills/commands indexed once, by description, for the routing suggestions in Step 5 of
 `skills/promper/SKILL.md`.
@@ -196,21 +196,11 @@ These same two deterministic building blocks power the hooks described in
 classifier `gate-prompt.mjs` uses the same way. Both are also plain CLI commands — useful
 standalone for debugging what a hook would do, without needing a live spawn.
 
-**Positioning:** promper is built for frontier harnesses (Claude Code and friends). For
-custom harnesses — LangGraph, Flowise, bespoke agent loops — use
-[invoker](https://github.com/justjammin/invokerai) as an SDK routing node; it consumes the
-same `~/.invoker/map/` artifact and shares the bead_graph node shape and bead ticket
-lifecycle.
-
 **Local dev:** the two skills are symlinked into `~/.claude/skills/`, so the commands resolve directly while you hack on them (restart Claude Code to pick up new commands). The repo stays the single source of truth: the symlinks point back at `skills/promper` and `skills/prim`, so there's no second copy to drift.
 
-> **invokerai is optional.** promper routes itself: it picks the role-source agent from the
-> in-session agent list when visible, else from the lean map pieces at `~/.invoker/map/`
-> (built by `/promper:setup`, or converted one-shot from a legacy invokerai
-> `agent-map.json`). No list and no map → generic expert role plus a setup suggestion.
-> promper's internal node shape ({id, domain, action, deps, parallel, agent}) matches
-> invokerai's bead_graph, so a promper plan still hands off cleanly to `/invokerai:spawn`
-> if you want full BEADS-tracked orchestration.
+> promper routes itself: it picks the role-source agent from the in-session agent list when
+> visible, else from the lean map pieces at `~/.invoker/map/` (built by `/promper:setup`). No
+> list and no map → generic expert role plus a setup suggestion.
 
 ## License
 

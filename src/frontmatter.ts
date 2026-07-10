@@ -1,6 +1,5 @@
 /**
  * frontmatter.ts — leading `---` YAML block parsing.
- * Port of `_parse_frontmatter` in invokerai/agent_invoker/agent_map.py.
  */
 
 import yaml from "js-yaml";

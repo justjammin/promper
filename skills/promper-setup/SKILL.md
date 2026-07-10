@@ -26,8 +26,6 @@ keyword classifier could not.
 
 - Frontmatter fields only; **`tools` is never stored in pieces** (largest source of map bloat).
 - One file per domain so a routing pass reads only the piece it needs.
-- The legacy `~/.invoker/agent-map.json` is left untouched (`prim` still reads it); refresh it
-  with `--legacy` when wanted.
 
 ---
 
@@ -56,7 +54,7 @@ npx @ninjamin/promper scan
 
 Flags: `--check` dry run · `--dir <path>` extra agent dirs (repeatable) ·
 `--plugins <root>` scan a plugin marketplace (repeatable) · `--no-defaults` skip the default
-agent dirs · `--legacy` also refresh the legacy agent-map.json · `--out <path>` alternate map dir.
+agent dirs · `--out <path>` alternate map dir.
 
 Default scan dirs: `~/.claude/agents`, `./.claude/agents`, `~/.codex/agents`,
 `~/.gemini/agents`. The scanner is idempotent and additive: existing domain assignments are
@@ -89,22 +87,5 @@ move the entries, delete the stray piece, update `index.json`.
 
 ---
 
-## Fallback — scanner unavailable
-
-Node/npx missing but a legacy `~/.invoker/agent-map.json` exists → one-shot jq conversion
-(no rescan):
-
-```bash
-mkdir -p ~/.invoker/map
-jq '{version: 1, domains: (.domains | map_values([.[].name]))}' \
-  ~/.invoker/agent-map.json > ~/.invoker/map/index.json
-for d in $(jq -r '.domains | keys[]' ~/.invoker/agent-map.json); do
-  jq --arg d "$d" \
-    '[.domains[$d][] | {name, description, file: (.file // (.name + ".md"))} + (if .model then {model: .model} else {} end)]' \
-    ~/.invoker/agent-map.json > ~/.invoker/map/"$d".json
-done
-```
-
 ## Edge cases
 - **No agents found anywhere:** say so; suggest installing agents before relying on role inheritance.
-- **Both legacy map and pieces exist:** pieces win for routing; `--legacy` re-syncs the old file.

@@ -3,7 +3,7 @@
 // bootstraps the role source (the wshobson/agents marketplace — a HARD dependency).
 // npx runs from a throwaway cache, so we COPY (not symlink, which the repo uses for local dev).
 // `promper bootstrap` — ensure the wshobson/agents marketplace is added and scan it.
-// `promper scan [--plugins <root>] [--no-defaults] [--dir <path>] [--check] [--legacy] [--out <path>]`
+// `promper scan [--plugins <root>] [--no-defaults] [--dir <path>] [--check] [--out <path>]`
 // `promper hydrate <agent> "<task>" [--json] [--template <path>] [--map <dir>]`
 // `promper brief "<task>" [--agent <name>] [--subagent-type <type>] [--json] [--map <dir>] [--state <path>]`
 // `promper gate "<prompt>" [--transcript <path>] [--prior-turns <n>] [--json]`
