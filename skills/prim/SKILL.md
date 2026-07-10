@@ -37,9 +37,12 @@ scoring rubric, severity definitions, and seal threshold. Score strictly against
 
 ### Step 1 — Discover agents
 Find agent files in (in order): `~/.claude/agents/`, `./.claude/agents/`, `./.agents/`, and the
-plugin agent paths referenced by `~/.invoker/agent-map.json`. For each, record: name, **source
+agents in promper's lean map — read `~/.invoker/map/index.json` (`roots` + domain lists) and
+resolve each piece entry's relative `file` against its root (these are the marketplace agents,
+e.g. wshobson/agents under `~/.claude/plugins/marketplaces/`). For each, record: name, **source
 path**, and whether it is **user-authored** (`~/.claude/agents/` or a project dir) or
-**plugin-provided** (inside `~/.claude/plugins/...`). This distinction is critical for `--fix`.
+**plugin-provided** (inside `~/.claude/plugins/...` or a marketplace root). This distinction is
+critical for `--fix`.
 
 ### Step 2 — User gates the set (mandatory)
 Display the discovered agents grouped by user vs plugin. Ask the user which to evaluate. Accept:

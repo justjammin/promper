@@ -35,7 +35,7 @@ interface HydrateOptions {
   json: boolean;
 }
 
-interface ResolvedAgent {
+export interface ResolvedAgent {
   name: string;
   absPath: string;
   plugin: string | null;
@@ -92,7 +92,7 @@ async function readJson(filePath: string): Promise<unknown | null> {
 }
 
 /** Map lookup: exact entry name, else file-stem match (fastapi-pro -> python-development-fastapi-pro). */
-async function resolveViaMap(mapDir: string, agent: string): Promise<ResolvedAgent | null> {
+export async function resolveViaMap(mapDir: string, agent: string): Promise<ResolvedAgent | null> {
   const index = (await readJson(path.join(mapDir, "index.json"))) as
     | { roots?: string[]; domains?: Record<string, string[]> }
     | null;
@@ -137,7 +137,7 @@ async function resolveViaMap(mapDir: string, agent: string): Promise<ResolvedAge
 }
 
 /** Fallback: walk each root's plugins/<plugin>/agents/ dirs for a stem match. */
-async function resolveViaWalk(roots: string[], agent: string): Promise<ResolvedAgent | null> {
+export async function resolveViaWalk(roots: string[], agent: string): Promise<ResolvedAgent | null> {
   const wanted = agent.toLowerCase();
   for (const root of roots) {
     const pluginsDir = path.join(root, "plugins");
@@ -166,11 +166,11 @@ async function resolveViaWalk(roots: string[], agent: string): Promise<ResolvedA
 }
 
 /** Persona = the raw agent file, frontmatter included (name/description/model context travels with the role). */
-function personaBody(text: string): string {
+export function personaBody(text: string): string {
   return text.trimEnd();
 }
 
-async function listNames(dir: string): Promise<string[]> {
+export async function listNames(dir: string): Promise<string[]> {
   try {
     return (await fs.readdir(dir)).filter((n) => !n.startsWith(".")).map((n) => n.replace(/\.md$/, "")).sort();
   } catch {
@@ -178,11 +178,10 @@ async function listNames(dir: string): Promise<string[]> {
   }
 }
 
-export async function runHydrate(argv: string[]): Promise<void> {
-  const opts = parseArgs(argv);
-
-  const index = (await readJson(path.join(opts.mapDir, "index.json"))) as { roots?: string[] } | null;
-  const roots = Array.isArray(index?.roots) ? (index?.roots as string[]) : [];
+/** roots declared in index.json, plus cwd if it's itself a marketplace (has a plugins/ dir). */
+export async function effectiveRoots(mapDir: string): Promise<string[]> {
+  const index = (await readJson(path.join(mapDir, "index.json"))) as { roots?: string[] } | null;
+  const roots = Array.isArray(index?.roots) ? [...(index?.roots as string[])] : [];
   const cwdPlugins = path.join(process.cwd(), "plugins");
   try {
     await fs.access(cwdPlugins);
@@ -190,22 +189,30 @@ export async function runHydrate(argv: string[]): Promise<void> {
   } catch {
     /* cwd is not a marketplace */
   }
+  return roots;
+}
 
-  const resolved = (await resolveViaMap(opts.mapDir, opts.agent)) ?? (await resolveViaWalk(roots, opts.agent));
-  if (!resolved) {
-    throw new Error(
-      `agent "${opts.agent}" not found in the map (${opts.mapDir}) or under any marketplace root — run \`promper scan --plugins <root>\` first`,
-    );
-  }
+export interface HydrateResult {
+  agent: string;
+  plugin: string | null;
+  source: string;
+  skills: string[];
+  commands: string[];
+  prompt: string;
+}
 
-  const raw = await fs.readFile(resolved.absPath, "utf8");
-  const fm = parseFrontmatter(raw);
-  const displayName = (typeof fm?.["name"] === "string" && (fm["name"] as string).trim()) || resolved.name;
-  const persona = personaBody(raw);
+export interface PluginToolkit {
+  skills: string[];
+  commands: string[];
+  /** Formatted `[TOOLKIT]` block, "" when the plugin has neither skills nor commands. */
+  block: string;
+}
 
-  let toolkitBlock = "";
+/** List a resolved agent's plugin skills/commands (names only, no file reads) and format the toolkit block. */
+export async function loadPluginToolkit(resolved: ResolvedAgent): Promise<PluginToolkit> {
   let skills: string[] = [];
   let commands: string[] = [];
+  let block = "";
   if (resolved.plugin && resolved.root) {
     const pluginDir = path.join(resolved.root, "plugins", resolved.plugin);
     skills = await listNames(path.join(pluginDir, "skills"));
@@ -214,9 +221,38 @@ export async function runHydrate(argv: string[]): Promise<void> {
       const parts: string[] = [];
       if (skills.length > 0) parts.push(`skills: ${skills.join(", ")}`);
       if (commands.length > 0) parts.push(`commands: ${commands.join(", ")}`);
-      toolkitBlock = `\n[TOOLKIT]\nThis role carries the ${resolved.plugin} toolkit — ${parts.join("; ")}.\nReach for these when relevant.\n`;
+      block = `\n[TOOLKIT]\nThis role carries the ${resolved.plugin} toolkit — ${parts.join("; ")}.\nReach for these when relevant.\n`;
     }
   }
+  return { skills, commands, block };
+}
+
+/**
+ * Resolve `agentName` via the lean map (falling back to a marketplace walk), and build its
+ * spawn-ready prompt: persona + plugin toolkit + task. Throws if the agent can't be found —
+ * callers that want a soft failure (e.g. `brief`) should catch and degrade.
+ */
+export async function hydrateAgent(
+  agentName: string,
+  task: string,
+  opts: { mapDir?: string; templatePath?: string | null } = {},
+): Promise<HydrateResult> {
+  const mapDir = opts.mapDir ?? path.join(homedir(), ".invoker", "map");
+  const roots = await effectiveRoots(mapDir);
+
+  const resolved = (await resolveViaMap(mapDir, agentName)) ?? (await resolveViaWalk(roots, agentName));
+  if (!resolved) {
+    throw new Error(
+      `agent "${agentName}" not found in the map (${mapDir}) or under any marketplace root — run \`promper scan --plugins <root>\` first`,
+    );
+  }
+
+  const raw = await fs.readFile(resolved.absPath, "utf8");
+  const fm = parseFrontmatter(raw);
+  const displayName = (typeof fm?.["name"] === "string" && (fm["name"] as string).trim()) || resolved.name;
+  const persona = personaBody(raw);
+
+  const { skills, commands, block: toolkitBlock } = await loadPluginToolkit(resolved);
 
   const template = opts.templatePath ? await fs.readFile(opts.templatePath, "utf8") : DEFAULT_TEMPLATE;
   const prompt = template
@@ -225,17 +261,18 @@ export async function runHydrate(argv: string[]): Promise<void> {
     .replaceAll("{{PLUGIN}}", resolved.plugin ?? "")
     .replaceAll("{{TARGET_ROLE_PROFILE}}", persona)
     .replaceAll("{{TOOLKIT_BLOCK}}", toolkitBlock)
-    .replaceAll("{{USER_TASK}}", opts.task);
+    .replaceAll("{{USER_TASK}}", task);
+
+  return { agent: displayName, plugin: resolved.plugin, source: resolved.absPath, skills, commands, prompt };
+}
+
+export async function runHydrate(argv: string[]): Promise<void> {
+  const opts = parseArgs(argv);
+  const result = await hydrateAgent(opts.agent, opts.task, { mapDir: opts.mapDir, templatePath: opts.templatePath });
 
   if (opts.json) {
-    console.log(
-      JSON.stringify(
-        { agent: displayName, plugin: resolved.plugin, source: resolved.absPath, skills, commands, prompt },
-        null,
-        2,
-      ),
-    );
+    console.log(JSON.stringify(result, null, 2));
     return;
   }
-  console.log(prompt);
+  console.log(result.prompt);
 }

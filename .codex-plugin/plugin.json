@@ -7,15 +7,10 @@
     "name": "Jamin Echols",
     "url": "https://github.com/justjammin"
   },
-  "homepage": "https://github.com/justjammin/promper",
-  "repository": "https://github.com/justjammin/promper",
   "license": "Apache-2.0",
-  "keywords": [
-    "prompt-engineering",
-    "invokerai",
-    "agents",
-    "prompt",
-    "orchestration",
-    "claude-code"
-  ]
+  "interface": {
+    "displayName": "Promper",
+    "shortDescription": "Engineer role-grounded prompts via inline agent routing; certify agents against the prompt-engineering standard.",
+    "category": "Coding"
+  }
 }

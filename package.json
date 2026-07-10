@@ -1,6 +1,7 @@
 {
   "name": "@ninjamin/promper",
   "version": "0.1.0",
+  "type": "module",
   "publishConfig": {
     "access": "public"
   },
@@ -9,7 +10,8 @@
     "promper": "bin/promper.mjs"
   },
   "scripts": {
-    "build": "tsc"
+    "build": "tsc --noEmit && node tools/build-dist.mjs && npm run build:manifests",
+    "build:manifests": "node tools/gen-manifests.mjs"
   },
   "files": [
     "bin/",
@@ -17,19 +19,22 @@
     "src/",
     "skills/",
     "reference/",
+    "hooks/",
+    "tools/",
+    "plugin.source.json",
     ".claude-plugin/",
+    ".codex-plugin/",
     "README.md",
     "assets/"
   ],
   "engines": {
     "node": ">=18"
   },
-  "dependencies": {
-    "js-yaml": "^4.1.0"
-  },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.0.0",
+    "esbuild": "^0.28.1",
+    "js-yaml": "^4.1.0",
     "typescript": "^5.5.0"
   },
   "keywords": [

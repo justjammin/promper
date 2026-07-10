@@ -5,6 +5,8 @@
 // `promper bootstrap` — ensure the wshobson/agents marketplace is added and scan it.
 // `promper scan [--plugins <root>] [--no-defaults] [--dir <path>] [--check] [--legacy] [--out <path>]`
 // `promper hydrate <agent> "<task>" [--json] [--template <path>] [--map <dir>]`
+// `promper brief "<task>" [--agent <name>] [--subagent-type <type>] [--json] [--map <dir>] [--state <path>]`
+// `promper gate "<prompt>" [--transcript <path>] [--prior-turns <n>] [--json]`
 
 import { cp, mkdir, access } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
@@ -93,6 +95,26 @@ async function run() {
       throw new Error(`could not load dist/hydrate.js (${err.message}); run \`npm run build\` first`);
     }
     await mod.runHydrate(argv.slice(1));
+    return;
+  }
+  if (argv[0] === "brief") {
+    let mod;
+    try {
+      mod = await import("../dist/brief.js");
+    } catch (err) {
+      throw new Error(`could not load dist/brief.js (${err.message}); run \`npm run build\` first`);
+    }
+    await mod.runBrief(argv.slice(1));
+    return;
+  }
+  if (argv[0] === "gate") {
+    let mod;
+    try {
+      mod = await import("../dist/gate.js");
+    } catch (err) {
+      throw new Error(`could not load dist/gate.js (${err.message}); run \`npm run build\` first`);
+    }
+    await mod.runGate(argv.slice(1));
     return;
   }
   await main();
