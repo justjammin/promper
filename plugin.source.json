@@ -8,7 +8,7 @@
   "homepage": "https://github.com/justjammin/promper",
   "repository": "https://github.com/justjammin/promper",
   "license": "Apache-2.0",
-  "keywords": ["prompt-engineering", "invokerai", "agents", "prompt", "orchestration", "claude-code"],
+  "keywords": ["prompt-engineering", "agents", "prompt", "orchestration", "claude-code"],
   "skills": "./skills/",
   "codex": {
     "displayName": "Promper",

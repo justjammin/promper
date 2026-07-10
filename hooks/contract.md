@@ -16,11 +16,14 @@ spawns the routed specialist as a subagent. Spawn on judgment, not only when exp
 ROUTING HAND-OFF + EDIT GATE: before direct edits in the active repo, or after routing a node,
 record the decision at ~/.invoker/state/promper-decision.json:
 {"verdict":"inline"|"agent"|"mixed","repo":"<repo root>","agent":"<routed agent name, if any>","reason":"<one line>","ts":<epoch ms>}
-The edit gate enforces it — verdict inline/mixed unlocks direct edits in the repo (60-min TTL);
-verdict agent means the work goes to the spawned specialist. When `agent` is recorded, promper's
-PreToolUse spawn hook inherits that exact role automatically on the next general-purpose spawn
-in this repo — no need to re-route.
+The contract gate (PreToolUse on Edit|Write|MultiEdit|NotebookEdit) enforces it: edits to files
+inside the repo are denied until a fresh decision (any verdict, 60-min TTL, same repo root)
+exists. Writes outside the repo — including the state file itself — are never gated. The
+decision is cleared at session end, so each session re-runs the agent-walk before its first
+repo edit. When `agent` is recorded, promper's PreToolUse spawn hook inherits that exact role
+automatically on the next general-purpose spawn in this repo — no need to re-route.
 
 OFF SWITCH: PROMPER_ACTIVE=0 disables all of promper's automatic hooks (this injection, the
-deep-dive nudge, and the spawn-brief rewrite). /promper, /prim, and /promper:setup are
-unaffected — they stay available as the manual path regardless.
+deep-dive nudge, the spawn-brief rewrite, the contract gate, and the session-end decision
+clear). /promper, /prim, and /promper:setup are unaffected — they stay available as the manual
+path regardless.

@@ -91,6 +91,15 @@ rewrite. Removing `invoker-gate.js`/`invoker-mark.js` would break real enforceme
 retire a redundant reminder. Leave them in place until/unless promper ships its own gate
 enforcement hook.
 
+> **Update:** the plugin now ships that enforcement — `hooks/contract-gate.mjs` (PreToolUse on
+> `Edit|Write|MultiEdit|NotebookEdit`, denies repo edits until a fresh `promper-decision.json`
+> exists) plus `hooks/clear-decision.mjs` (SessionEnd re-arm). Semantics differ slightly from
+> the personal pair: the shipped gate accepts a fresh decision of **any** verdict (it can't
+> distinguish subagent edits, so blocking `verdict:"agent"` would lock out the routed
+> specialist), and needs no `invoker-mark.js`-style subagent marking. Once the plugin gate is
+> confirmed firing on a device, the personal `invoker-gate.js`/`invoker-mark.js` registrations
+> there are redundant (double-gating) and can be removed.
+
 ## Steps to repeat this on another device
 
 1. Confirm the promper plugin is installed and its hooks are registered — restart Claude Code,

@@ -3275,7 +3275,6 @@ function parseArgs(argv) {
     categoryRoots: [],
     noDefaults: false,
     check: false,
-    legacy: false,
     outDir: path.join(homedir(), ".invoker", "map")
   };
   for (let i = 0; i < argv.length; i++) {
@@ -3310,9 +3309,6 @@ function parseArgs(argv) {
         break;
       case "--no-defaults":
         opts.noDefaults = true;
-        break;
-      case "--legacy":
-        opts.legacy = true;
         break;
       default:
         throw new Error(`unknown flag: ${arg}`);
@@ -3707,26 +3703,6 @@ function serializeIndex(buckets, roots) {
 function serializePiece(entries) {
   return JSON.stringify(entries, null, 2) + "\n";
 }
-function serializeLegacy(buckets, scanned) {
-  const domains = {};
-  for (const domain of [...buckets.keys()].sort()) {
-    const bucket = buckets.get(domain);
-    if (!bucket) continue;
-    domains[domain] = bucket.map((e) => {
-      const source = scanned.get(e.name);
-      const legacy = {
-        name: e.name,
-        file: e.file,
-        description: e.description
-      };
-      if (source && source.tools.length > 0) legacy["tools"] = source.tools;
-      const model = e.model ?? source?.model;
-      if (model !== void 0) legacy["model"] = model;
-      return legacy;
-    });
-  }
-  return JSON.stringify({ version: MAP_VERSION, domains }, null, 2) + "\n";
-}
 async function readIfExists(filePath) {
   try {
     return await fs.readFile(filePath, "utf8");
@@ -3798,12 +3774,6 @@ async function runScan(argv) {
     if (await readIfExists(piecePath) === null) continue;
     if (!opts.check) await fs.unlink(piecePath);
     staleRemoved.push(`${domain}.json`);
-  }
-  if (opts.legacy) {
-    const legacyPath = path.join(homedir(), ".invoker", "agent-map.json");
-    if (await writeIfChanged(legacyPath, serializeLegacy(result.buckets, scanned), opts.check)) {
-      changedFiles.push(legacyPath);
-    }
   }
   const agentCount = [...result.buckets.values()].reduce((n, b) => n + b.length, 0);
   const unmappedBucket = result.buckets.get("unmapped") ?? [];

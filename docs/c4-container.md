@@ -29,7 +29,7 @@ This container deploys the following components (see [c4-component.md](./c4-comp
 
 - **promper CLI Engine** — deterministic scan/hydrate/brief/gate engine, exposed as `bin/promper.mjs` (CLI dispatcher) plus the compiled `dist/scan.js`, `dist/hydrate.js`, `dist/brief.js`, `dist/gate.js` bundles. Owns the lean routing map and the persisted-decision state file end-to-end. No dependency on any other promper component.
   - Documentation: [c4-component-cli-engine.md](./c4-component-cli-engine.md)
-- **Active Mode Hooks** — three Claude Code lifecycle hook scripts (`hooks/inject-contract.mjs`, `hooks/gate-prompt.mjs`, `hooks/enrich-spawn.mjs`) that make routing and role-inheritance fire automatically during a session, by calling into the CLI Engine's compiled `dist/brief.js` / `dist/gate.js` via dynamic `import()` (never subprocess).
+- **Active Mode Hooks** — five Claude Code lifecycle hook scripts (`hooks/inject-contract.mjs`, `hooks/gate-prompt.mjs`, `hooks/enrich-spawn.mjs`, `hooks/contract-gate.mjs`, `hooks/clear-decision.mjs`) that make routing, role-inheritance, and contract enforcement fire automatically during a session — the first three calling into the CLI Engine's compiled `dist/brief.js` / `dist/gate.js` via dynamic `import()` (never subprocess), the gate/clear pair self-contained on Node built-ins.
   - Documentation: [c4-component-active-mode-hooks.md](./c4-component-active-mode-hooks.md)
 
 Both components ship inside the same package version, in the same install, at the same path on disk — they are not independently versioned or independently deployable.
@@ -51,6 +51,8 @@ Three lifecycle event handlers registered in `hooks/hooks.json`, each a Node pro
 - **`SessionStart`** (`hooks/inject-contract.mjs`, no matcher — fires on start/resume/compact/clear): injects `hooks/contract.md` as `additionalContext`.
 - **`UserPromptSubmit`** (`hooks/gate-prompt.mjs`, no matcher — fires on every user message): classifies "deep" vs "follow-up"; on "deep", emits a NUDGE to run `/promper` agent-walk.
 - **`PreToolUse`** (`hooks/enrich-spawn.mjs`, matcher `"Agent|Task"`): rewrites the spawn prompt via `buildBrief()` to embed the recorded routing decision, so subagents inherit a role.
+- **`PreToolUse`** (`hooks/contract-gate.mjs`, matcher `"Edit|Write|MultiEdit|NotebookEdit"`): denies edits to repo files until a fresh routing decision exists in the state file (any verdict, same repo, 60-min TTL); out-of-repo writes are never gated; fails open.
+- **`SessionEnd`** (`hooks/clear-decision.mjs`, no matcher): clears this repo's routing decision so the contract gate re-arms for the next session.
 
 Full request/response JSON shapes and degrade paths: [c4-component-active-mode-hooks.md](./c4-component-active-mode-hooks.md#interfaces).
 
@@ -64,7 +66,7 @@ Three skill directories, copied into `~/.claude/skills/` at install time (`bin/p
 
 ### API Specifications — not applicable
 
-This container is explicitly **not** given an OpenAPI/Swagger specification. There is no HTTP surface, no request/response schema served over a network, and no client that calls this container remotely — every interface above is either a local process invocation (argv), a local stdin/stdout JSON handshake with the Claude Code host process on the same machine, or a skill file loaded directly by the host. Generating an OpenAPI document for any of these would misrepresent the system as a networked service, which it is not. The stdin/stdout JSON shapes for the three hooks are documented verbatim above (linked) instead, since that is the actual, complete interface contract.
+This container is explicitly **not** given an OpenAPI/Swagger specification. There is no HTTP surface, no request/response schema served over a network, and no client that calls this container remotely — every interface above is either a local process invocation (argv), a local stdin/stdout JSON handshake with the Claude Code host process on the same machine, or a skill file loaded directly by the host. Generating an OpenAPI document for any of these would misrepresent the system as a networked service, which it is not. The stdin/stdout JSON shapes for the five hooks are documented verbatim above (linked) instead, since that is the actual, complete interface contract.
 
 ## Dependencies
 
@@ -77,7 +79,7 @@ This container is explicitly **not** given an OpenAPI/Swagger specification. The
 - **`wshobson/agents` Claude Code plugin marketplace (GitHub)** — hard dependency, the sole source of agent persona/role data. Registered via a `claude plugin marketplace add wshobson/agents` subprocess during `bootstrap`; the CLI Engine's `scan` reads agent `.md` files from its plugin cache. Nothing in the package can substitute for this — if it can't be added, installation continues with a warning but role discovery has no other source.
 - **Local filesystem state**:
   - `~/.invoker/map/` (`index.json`, per-domain piece files, `toolkits.json`) — the lean routing map, written by `scan`, read by `hydrate`/`brief`. This is the container's only persistent "database," and it lives on the same machine as the container itself — never a remote store.
-  - `~/.invoker/state/promper-decision.json` — the hand-off file between `gate-prompt.mjs`'s nudge and `enrich-spawn.mjs`'s read, and between manual `promper brief` runs and later Agent/Task spawns. 60-minute TTL, scoped to git repo root.
+  - `~/.invoker/state/promper-decision.json` — the hand-off file between `gate-prompt.mjs`'s nudge and `enrich-spawn.mjs`'s read, and between manual `promper brief` runs and later Agent/Task spawns; also what `contract-gate.mjs` checks before allowing repo edits and `clear-decision.mjs` removes at session end. 60-minute TTL, scoped to git repo root.
   - `~/.claude/skills/` — install target for the three skill directories.
 - **Claude Code host application** — the only process that ever invokes the Active Mode Hooks (per `hooks.json`) or loads the skill files; also the process a human is inside of when running `promper` manually via `/promper`. Without a running Claude Code session, the hook interfaces are simply never invoked (they are not a standalone service listening for anything).
 - **`claude` CLI (subprocess)** — invoked by `bin/promper.mjs`'s `bootstrap()` to register the `wshobson/agents` marketplace.

@@ -3,7 +3,7 @@
 ## Overview
 
 - **Name**: promper Hook Registry — Claude Code Plugin Hook Layer
-- **Description**: Three Node.js ESM hook scripts registering Claude Code lifecycle event handlers (SessionStart, UserPromptSubmit, PreToolUse) that orchestrate deterministic prompt engineering, agent routing nudges, and subagent spawn enrichment. Zero LLM calls, zero npm dependencies.
+- **Description**: Five Node.js ESM hook scripts registering Claude Code lifecycle event handlers (SessionStart, UserPromptSubmit, PreToolUse, SessionEnd) that orchestrate deterministic prompt engineering, agent routing nudges, subagent spawn enrichment, and contract-gate edit enforcement. Zero LLM calls, zero npm dependencies.
 - **Location**: `/Users/jammin/Documents/GitHub/promper/hooks/`
 - **Language**: JavaScript (Node.js ESM, v18+ required)
 - **Purpose**: Inject Claude Code orchestration contract at session start, nudge agent-walk on new substantial tasks, rewrite subagent spawn prompts with role inheritance — all deterministic, all without blocking the main tool chain.
@@ -201,11 +201,38 @@ This hooks layer is the runtime enforcement of promper's orchestration philosoph
 
 ---
 
+### contract-gate.mjs
+
+**File**: `/Users/jammin/Documents/GitHub/promper/hooks/contract-gate.mjs`
+
+**Purpose**: PreToolUse hook (matcher `Edit|Write|MultiEdit|NotebookEdit`) — the contract's enforcement layer. Denies edits to files inside the active repo root until a fresh routing decision exists at `~/.invoker/state/promper-decision.json` (valid verdict, same repo root, 60-min TTL — same freshness rules as `src/brief.ts`). The deny reason re-delivers the contract summary plus the literal decision JSON to write. Self-contained (no `dist/` import). Deterministic. No LLM.
+
+**Key functions**:
+- `gitRoot(): string` — repo root via `git rev-parse --show-toplevel`, cwd fallback (mirrors brief.ts)
+- `decisionSatisfies(repoRoot): boolean` — parse + validate the decision file (verdict ∈ {inline, agent, mixed}, repo match, TTL)
+- `denyMessage(repoRoot): string` — contract summary + exact JSON schema, repo root interpolated
+- `main()` — off-switch check → stdin parse → tool/target extraction → repo-containment check → allow or structured deny (`permissionDecision: "deny"`)
+
+**Design invariants**:
+- Only repo-contained targets are gated; the state file lives outside every repo, so recording the decision always passes (no bootstrap deadlock)
+- Accepts a fresh decision of ANY verdict — hooks also fire inside subagents, so denying `verdict:"agent"` edits would lock out the routed specialist
+- Fails open on every unexpected path (parse error, missing target path, unreadable state)
+
+---
+
+### clear-decision.mjs
+
+**File**: `/Users/jammin/Documents/GitHub/promper/hooks/clear-decision.mjs`
+
+**Purpose**: SessionEnd hook — re-arms the contract gate by deleting `promper-decision.json` when the session ends, so a decision's remaining TTL never carries into a fresh session. Repo-scoped: only clears a decision whose `repo` matches this session's repo root (or an unparseable file); never wipes another repo's live decision. SessionEnd rather than Stop — Stop fires after every turn, which would force a re-walk per turn and starve the spawn hook's row 2.
+
+---
+
 ### hooks.json
 
 **File**: `/Users/jammin/Documents/GitHub/promper/hooks/hooks.json`
 
-**Purpose**: Hook registration manifest. Registers all three hooks with Claude Code runtime using standard hook event names and command paths.
+**Purpose**: Hook registration manifest. Registers all five hooks with Claude Code runtime using standard hook event names and command paths.
 
 **Schema**:
 ```json
@@ -240,6 +267,25 @@ This hooks layer is the runtime enforcement of promper's orchestration philosoph
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/enrich-spawn.mjs\""
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/contract-gate.mjs\""
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/clear-decision.mjs\""
+          }
+        ]
       }
     ]
   }
@@ -248,8 +294,8 @@ This hooks layer is the runtime enforcement of promper's orchestration philosoph
 
 **Key Points**:
 - `${CLAUDE_PLUGIN_ROOT}`: resolved by Claude Code to plugin installation root
-- `PreToolUse` entry has `matcher: "Agent|Task"` — only fire when tool_name matches regex
-- `SessionStart` and `UserPromptSubmit` have no matcher — fire unconditionally
+- `PreToolUse` entries carry matchers (`Agent|Task` for spawn enrichment, `Edit|Write|MultiEdit|NotebookEdit` for the contract gate) — each fires only when tool_name matches its regex
+- `SessionStart`, `UserPromptSubmit`, and `SessionEnd` have no matcher — fire unconditionally
 
 ---
 
@@ -263,7 +309,7 @@ This hooks layer is the runtime enforcement of promper's orchestration philosoph
 - Routing overview: decompose inline → route via `~/.invoker/map/` → inherit persona
 - Execution decision rules: <5K tokens expected noise → inline; noisy/parallel → spawn agent
 - Routing hand-off spec: write `~/.invoker/state/promper-decision.json` before direct edits
-- Edit gate enforcement: verdict "inline"/"agent"/"mixed" unlocks/gates repo edits
+- Edit gate enforcement: repo edits denied by contract-gate.mjs until a fresh decision (any verdict) exists; cleared at session end
 - Off-switch: `PROMPER_ACTIVE=0` disables all automatic hooks
 
 ---
@@ -286,21 +332,26 @@ This hooks layer is the runtime enforcement of promper's orchestration philosoph
 
 All Node.js built-in modules (zero npm dependencies by design):
 
-- **node:fs** (enrich-spawn.mjs, inject-contract.mjs)
+- **node:fs** (enrich-spawn.mjs, inject-contract.mjs, gate-prompt.mjs, contract-gate.mjs, clear-decision.mjs)
   - `appendFileSync()` — write debug log lines
-  - `readFileSync()` — read contract.md at session start
+  - `readFileSync()` — read contract.md (session start + deep-prompt re-injection), read promper-decision.json
+  - `unlinkSync()` — remove promper-decision.json at session end
 
-- **node:os** (enrich-spawn.mjs)
+- **node:os** (enrich-spawn.mjs, contract-gate.mjs, clear-decision.mjs)
   - `homedir()` — resolve `~/.invoker/map/` and `~/.invoker/state/`
 
-- **node:path** (all three .mjs files)
+- **node:child_process** (contract-gate.mjs, clear-decision.mjs)
+  - `spawnSync()` — `git rev-parse --show-toplevel` for repo-root resolution (cwd fallback)
+
+- **node:path** (all five .mjs files)
   - `dirname()` — extract HOOK_DIR from import.meta.url
   - `join()` — construct paths to dist/ and ~/.invoker/
+  - `relative()`/`resolve()`/`isAbsolute()` — repo-containment check in contract-gate.mjs
 
-- **node:url** (all three .mjs files)
+- **node:url** (inject-contract.mjs, gate-prompt.mjs, enrich-spawn.mjs)
   - `fileURLToPath()` — convert ESM import.meta.url to file path for dirname
 
-- **process global** (all three .mjs files)
+- **process global** (all five .mjs files)
   - `process.env` — check PROMPER_ACTIVE, read PROMPER_DEBUG_LOG
   - `process.stdin` — read JSON hook input
   - `process.stdout` — write JSON hook output
@@ -310,7 +361,7 @@ All Node.js built-in modules (zero npm dependencies by design):
 
 ## Relationships
 
-The three hooks form a coordinated system orchestrating promper's agent routing and prompt engineering at four key lifecycle points:
+The five hooks form a coordinated system orchestrating promper's agent routing, prompt engineering, and contract enforcement across the session lifecycle:
 
 ```mermaid
 ---
@@ -431,7 +482,7 @@ All hooks follow defensive fail-safe pattern:
 
 2. **Deterministic, not LLM-based**: No LLM calls in hooks. All logic (routing, gating, brief generation) is deterministic code in dist/brief.js and dist/gate.js. Hooks are purely orchestration glue.
 
-3. **Async but not awaited in main**: All three hooks read stdin asynchronously (`for await`), process, write stdout, exit. No background tasks. Completes synchronously from Claude Code's perspective.
+3. **Async but not awaited in main**: All five hooks read stdin asynchronously (`for await`), process, write stdout, exit. No background tasks. Completes synchronously from Claude Code's perspective.
 
 4. **Process exit is the completion signal**: Each hook calls `process.exit(0)` when done. This is how Claude Code knows hook execution is complete. Must not exit before writing output to stdout.
 
