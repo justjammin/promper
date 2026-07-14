@@ -7,6 +7,7 @@
 // `promper hydrate <agent> "<task>" [--json] [--template <path>] [--map <dir>]`
 // `promper brief "<task>" [--agent <name>] [--subagent-type <type>] [--json] [--map <dir>] [--state <path>]`
 // `promper gate "<prompt>" [--transcript <path>] [--prior-turns <n>] [--json]`
+// `promper classify "<text>" [--json] [--map <dir>] [--top <n>]`
 
 import { cp, mkdir, access } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
@@ -14,7 +15,7 @@ import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
-const SKILLS = ["promper", "promper-setup", "prim"];
+const SKILLS = ["promper", "promper-setup", "prim", "breakdown"];
 const MARKETPLACE_REPO = "wshobson/agents";
 const MARKETPLACE_NAME = "claude-code-workflows"; // its declared marketplace name
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -115,6 +116,16 @@ async function run() {
       throw new Error(`could not load dist/gate.js (${err.message}); run \`npm run build\` first`);
     }
     await mod.runGate(argv.slice(1));
+    return;
+  }
+  if (argv[0] === "classify") {
+    let mod;
+    try {
+      mod = await import("../dist/classify.js");
+    } catch (err) {
+      throw new Error(`could not load dist/classify.js (${err.message}); run \`npm run build\` first`);
+    }
+    await mod.runClassify(argv.slice(1));
     return;
   }
   await main();

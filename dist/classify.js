@@ -1,0 +1,287 @@
+// src/classify.ts
+import { promises as fs } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+
+// src/domains.ts
+var ROLE_DOMAIN = {
+  "backend-developer": "backend",
+  "fullstack-developer": "backend",
+  "fastapi-developer": "backend",
+  "django-developer": "backend",
+  "laravel-specialist": "backend",
+  "symfony-specialist": "backend",
+  "python-pro": "backend",
+  "php-pro": "backend",
+  "golang-pro": "backend",
+  "javascript-pro": "backend",
+  "typescript-pro": "backend",
+  "mcp-developer": "backend",
+  "frontend-developer": "frontend",
+  "react-specialist": "frontend",
+  "ui-designer": "frontend",
+  "database-optimizer": "database",
+  "database-administrator": "database",
+  "postgres-pro": "database",
+  "data-engineer": "data",
+  "data-analyst": "data",
+  "cloud-architect": "devops",
+  "kubernetes-specialist": "devops",
+  "git-workflow-manager": "devops",
+  "dx-optimizer": "devops",
+  "code-reviewer": "code-review",
+  "refactoring-specialist": "code-review",
+  "legacy-modernizer": "code-review",
+  "ml-engineer": "ml",
+  "machine-learning-engineer": "ml",
+  "llm-architect": "ml",
+  "data-scientist": "ml",
+  "test-automator": "testing",
+  "technical-writer": "documentation",
+  "documentation-engineer": "documentation",
+  "readme-generator": "documentation",
+  "mobile-developer": "mobile",
+  "mobile-app-developer": "mobile",
+  "expo-react-native-expert": "mobile",
+  "swift-expert": "mobile",
+  "architect-reviewer": "architecture",
+  "microservices-architect": "architecture",
+  "api-designer": "architecture",
+  "agent-organizer": "orchestration",
+  "context-manager": "orchestration",
+  "workflow-orchestrator": "orchestration",
+  "task-distributor": "orchestration",
+  "multi-agent-coordinator": "orchestration",
+  "accessibility-tester": "testing",
+  "cli-developer": "backend",
+  "mlops-engineer": "ml",
+  "penetration-tester": "security",
+  "qa-expert": "testing",
+  "quant-analyst": "data",
+  "blockchain-security-auditor": "security",
+  "codebase-onboarding-engineer": "architecture",
+  "compliance-auditor": "security",
+  "incident-response-commander": "devops",
+  "software-architect": "architecture",
+  "sre": "devops",
+  "code-simplifier": "code-review",
+  "integration-engineer": "architecture",
+  "content-marketer": "marketing",
+  "business-analyst": "business",
+  "competitive-analyst": "business",
+  "trend-analyst": "business",
+  "project-manager": "business",
+  "project-idea-validator": "business",
+  "research-analyst": "research",
+  "debugger": "backend",
+  "error-detective": "backend"
+};
+var CATEGORY_PRIORITY = {
+  security: 0,
+  testing: 1,
+  ml: 2,
+  debugging: 3,
+  "code-review": 4,
+  coding: 5,
+  architecture: 6,
+  data: 7,
+  documentation: 8,
+  research: 9,
+  orchestration: 10,
+  implementation: 11
+};
+var REGISTRY = [
+  { id: "architect-reviewer", category: "architecture", triggers: ["architect", "system design", "diagram", "pattern", "trade-off", "adr", "explain", "how does", "why"] },
+  { id: "api-designer", category: "architecture", triggers: ["api design", "endpoint design", "openapi", "swagger", "graphql schema", "grpc", "contract"] },
+  { id: "microservices-architect", category: "architecture", triggers: ["microservices", "decompose", "service mesh", "distributed", "monolith", "bounded context"] },
+  { id: "code-reviewer", category: "code-review", triggers: ["review", "code review", "review pr", "review this", "pull request", "second opinion", "security review", "code quality", "vulnerability", "owasp", "xss", "injection"] },
+  { id: "legacy-modernizer", category: "code-review", triggers: ["legacy", "modernize", "migrate", "old code", "upgrade", "refactor legacy", "technical debt"] },
+  { id: "refactoring-specialist", category: "code-review", triggers: ["refactor", "clean up", "restructure", "extract", "simplify", "duplication"] },
+  { id: "debugger", category: "debugging", triggers: ["bug", "broken", "not working", "failing", "error", "crash", "traceback", "exception", "undefined", "fix", "debug"] },
+  { id: "error-detective", category: "debugging", triggers: ["correlate errors", "cross-service", "root cause", "error pattern", "multiple services failing", "distributed trace"] },
+  { id: "cloud-architect", category: "devops", triggers: ["cloud", "aws", "gcp", "azure", "terraform", "infrastructure", "deploy", "kubernetes", "k8s", "docker"] },
+  { id: "technical-writer", category: "documentation", triggers: ["write docs", "user guide", "sdk docs", "getting started", "write documentation", "changelog"] },
+  { id: "ai-writing-auditor", category: "content-creation", triggers: ["audit writing", "ai writing", "remove ai tells", "humanize prose", "ai patterns"] },
+  { id: "documentation-engineer", category: "documentation", triggers: ["api docs", "documentation system", "technical documentation", "sdk docs", "docs architecture", "documentation engineer"] },
+  { id: "fintech-engineer", category: "enterprise", triggers: ["payment", "stripe", "financial", "compliance", "pci", "transaction", "ledger", "billing"] },
+  { id: "iot-engineer", category: "enterprise", triggers: ["iot", "device", "edge computing", "mqtt", "embedded", "sensor", "firmware"] },
+  { id: "m365-admin", category: "enterprise", triggers: ["microsoft 365", "m365", "exchange", "teams", "sharepoint", "graph api", "azure ad", "entra"] },
+  { id: "backend-developer", category: "coding", triggers: ["backend", "rest api", "graphql", "microservice", "node", "express", "fastapi", "django", "laravel", "flask", "spring boot", "rails", "nestjs"] },
+  { id: "frontend-developer", category: "coding", triggers: ["frontend", "ui", "component", "css", "html", "react", "vue", "angular", "svelte", "browser"] },
+  { id: "fullstack-developer", category: "coding", triggers: ["full stack", "fullstack", "full-stack", "feature", "end to end"] },
+  { id: "integration-engineer", category: "implementation", triggers: ["integration", "wire outputs", "glue code", "interface mismatch", "adapter", "bridge layer", "wire parallel"] },
+  { id: "mcp-developer", category: "coding", triggers: ["mcp", "model context protocol", "mcp server", "mcp tool", "mcp client"] },
+  { id: "ui-designer", category: "coding", triggers: ["ui design", "design system", "component library", "figma", "visual design", "ux"] },
+  { id: "agent-installer", category: "platform", triggers: ["install agent", "find agent", "browse agents", "claude agent", "subagent"] },
+  { id: "business-analyst", category: "product", triggers: ["business analysis", "requirements", "user stories", "process improvement", "stakeholder", "brd"] },
+  { id: "project-manager", category: "product", triggers: ["project plan", "roadmap", "milestone", "risk", "stakeholder", "gantt", "sprint planning"] },
+  { id: "task-distributor", category: "platform", triggers: ["distribute tasks", "queue", "workload balance", "worker pool"], orchestrate: true },
+  { id: "multi-agent-coordinator", category: "platform", triggers: ["coordinate agents", "multi-agent", "parallel agents", "agent communication"], orchestrate: true },
+  { id: "agent-organizer", category: "orchestration", triggers: ["agent team", "assemble agents", "agent workflow", "coordinate team"], orchestrate: true },
+  { id: "context-manager", category: "orchestration", triggers: ["shared state", "context sync", "agent state", "synchronize agents"], orchestrate: true },
+  { id: "workflow-orchestrator", category: "orchestration", triggers: ["workflow", "state machine", "business process", "orchestrate", "saga pattern"], orchestrate: true },
+  { id: "competitive-analyst", category: "research", triggers: ["competitor", "competitive analysis", "market leader", "benchmark", "market position"] },
+  { id: "project-idea-validator", category: "research", triggers: ["validate idea", "idea review", "go no go", "market validation", "pressure test"] },
+  { id: "research-analyst", category: "research", triggers: ["research", "analyze", "investigate", "survey", "literature review", "findings"] },
+  { id: "trend-analyst", category: "research", triggers: ["trend", "emerging", "forecast", "industry shift", "future", "strategic planning"] },
+  { id: "content-marketer", category: "content-creation", triggers: ["content strategy", "seo content", "content marketing", "blog post", "campaign", "content calendar"] },
+  { id: "test-automator", category: "testing", triggers: ["test", "unit test", "integration test", "e2e", "test coverage", "spec", "ci testing", "automated tests"] },
+  { id: "accessibility-tester", category: "testing", triggers: ["accessibility", "a11y", "wcag", "aria", "screen reader", "keyboard navigation", "color contrast", "focus order"] },
+  { id: "cli-developer", category: "coding", triggers: ["cli", "command-line", "terminal app", "command line tool", "argparse", "click", "cobra", "commander", "shell tool"] },
+  { id: "mlops-engineer", category: "ml", triggers: ["mlops", "model deployment", "model registry", "model pipeline", "feature drift", "drift detection", "canary rollout", "model monitoring", "model promotion"] },
+  { id: "penetration-tester", category: "security", triggers: ["pentest", "penetration test", "vulnerability scan", "security assessment", "exploit", "owasp testing", "ethical hacking", "red team"] },
+  { id: "qa-expert", category: "testing", triggers: ["qa", "quality assurance", "test strategy", "test planning", "defect", "quality metrics", "test coverage analysis", "acceptance criteria"] },
+  { id: "quant-analyst", category: "research", triggers: ["quant", "quantitative", "trading strategy", "financial model", "backtesting", "portfolio optimization", "derivatives pricing", "var", "sharpe ratio", "statistical arbitrage"] },
+  { id: "software-architect", category: "architecture", triggers: ["software architect", "bounded context", "architectural decision", "design from scratch", "monolith vs microservice", "c4 model", "event storming"] },
+  { id: "sre", category: "devops", triggers: ["slo", "sli", "error budget", "site reliability", "toil", "chaos engineering", "observability stack", "golden signals", "burn rate"] },
+  { id: "incident-response-commander", category: "devops", triggers: ["incident", "post-mortem", "postmortem", "runbook", "on-call", "oncall", "sev1", "sev2", "sev3", "pagerduty", "opsgenie", "incident commander"] },
+  { id: "codebase-onboarding-engineer", category: "architecture", triggers: ["onboard", "codebase tour", "explain repo", "new codebase", "orient code", "understand codebase", "repo map", "codebase overview"] },
+  { id: "compliance-auditor", category: "security", triggers: ["soc 2", "soc2", "hipaa", "pci-dss", "pci dss", "iso 27001", "compliance audit", "audit readiness", "audit gap", "evidence collection", "controls implementation"] },
+  { id: "blockchain-security-auditor", category: "security", triggers: ["smart contract", "solidity", "reentrancy", "defi", "evm", "web3", "blockchain audit", "slither", "flash loan", "oracle manipulation", "foundry exploit"] }
+];
+
+// src/classify.ts
+function escapeRegExp(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+function collectMatches(text) {
+  const t = text.toLowerCase();
+  const matches = [];
+  for (const agent of REGISTRY) {
+    if (agent.orchestrate) continue;
+    for (const trigger of agent.triggers) {
+      const re = new RegExp(`\\b${escapeRegExp(trigger)}\\b`);
+      if (re.test(t)) {
+        matches.push({
+          role: agent.id,
+          category: agent.category,
+          trigger,
+          priority: CATEGORY_PRIORITY[agent.category] ?? 99
+        });
+        break;
+      }
+    }
+  }
+  matches.sort((a, b) => a.priority - b.priority);
+  return matches;
+}
+function classify(name, description) {
+  const byName = ROLE_DOMAIN[name];
+  if (byName !== void 0) return { domain: byName, source: "name" };
+  if (description) {
+    const matches = collectMatches(description);
+    if (matches.length > 0) {
+      const first = matches[0];
+      if (first !== void 0) {
+        const domain = ROLE_DOMAIN[first.role];
+        if (domain !== void 0) return { domain, source: "description" };
+      }
+    }
+  }
+  return { domain: "unmapped", source: "unmapped" };
+}
+async function mapNames(mapDir, domain) {
+  try {
+    const raw = await fs.readFile(join(mapDir, `${domain}.json`), "utf8");
+    const entries = JSON.parse(raw);
+    if (!Array.isArray(entries)) return /* @__PURE__ */ new Set();
+    return new Set(entries.map((e) => typeof e?.name === "string" ? e.name : "").filter(Boolean));
+  } catch {
+    return /* @__PURE__ */ new Set();
+  }
+}
+async function classifyText(text, mapDir, top) {
+  const byDomain = /* @__PURE__ */ new Map();
+  for (const match of collectMatches(text)) {
+    const domain = ROLE_DOMAIN[match.role];
+    if (domain === void 0) continue;
+    let entry = byDomain.get(domain);
+    if (!entry) {
+      entry = { priority: match.priority, triggers: [], roles: [] };
+      byDomain.set(domain, entry);
+    }
+    entry.priority = Math.min(entry.priority, match.priority);
+    if (!entry.triggers.includes(match.trigger)) entry.triggers.push(match.trigger);
+    if (!entry.roles.includes(match.role)) entry.roles.push(match.role);
+  }
+  let ranked = [...byDomain.entries()].sort((a, b) => a[1].priority - b[1].priority);
+  if (top !== null && top > 0) ranked = ranked.slice(0, top);
+  const matches = [];
+  for (const [domain, entry] of ranked) {
+    const names = await mapNames(mapDir, domain);
+    matches.push({
+      domain,
+      priority: entry.priority,
+      triggers: entry.triggers,
+      roles: entry.roles,
+      suggestedAgents: entry.roles.map((name) => ({ name, inMap: names.has(name) }))
+    });
+  }
+  const first = matches[0];
+  return {
+    text,
+    primary: first !== void 0 ? first.domain : "unmapped",
+    unmapped: first === void 0,
+    matches
+  };
+}
+function parseClassifyArgs(argv) {
+  const positional = [];
+  const opts = {
+    text: "",
+    mapDir: join(homedir(), ".invoker", "map"),
+    top: null,
+    json: false
+  };
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === void 0) continue;
+    switch (arg) {
+      case "--map": {
+        const value = argv[++i];
+        if (!value) throw new Error("--map requires a directory");
+        opts.mapDir = value;
+        break;
+      }
+      case "--top": {
+        const value = argv[++i];
+        if (!value) throw new Error("--top requires a number");
+        const n = Number(value);
+        if (!Number.isInteger(n) || n < 1) throw new Error("--top must be a positive integer");
+        opts.top = n;
+        break;
+      }
+      case "--json":
+        opts.json = true;
+        break;
+      default:
+        if (arg.startsWith("--")) throw new Error(`unknown flag: ${arg}`);
+        positional.push(arg);
+    }
+  }
+  opts.text = positional.join(" ");
+  return opts;
+}
+async function runClassify(argv) {
+  const opts = parseClassifyArgs(argv);
+  if (!opts.text.trim()) throw new Error('usage: promper classify "<text>" [--json] [--map <dir>] [--top <n>]');
+  const result = await classifyText(opts.text, opts.mapDir, opts.top);
+  if (opts.json) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+  if (result.unmapped) {
+    console.log("unmapped \u2014 no domain triggers matched");
+    return;
+  }
+  for (const match of result.matches) {
+    const agents = match.suggestedAgents.map((agent) => `${agent.name}${agent.inMap ? "" : " (not in map)"}`).join(", ");
+    console.log(`${match.domain}  \u2190  ${match.triggers.join(", ")}  \u2192  ${agents}`);
+  }
+}
+export {
+  classify,
+  classifyText,
+  collectMatches,
+  runClassify
+};

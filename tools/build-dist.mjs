@@ -16,7 +16,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const ENTRIES = ["scan", "hydrate", "brief", "gate"];
+const ENTRIES = ["scan", "hydrate", "brief", "gate", "classify"];
 
 async function main() {
   const distDir = join(ROOT, "dist");

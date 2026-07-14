@@ -40,6 +40,24 @@ raw intent
 
 The default skeleton is Claude-native XML. Pass `--target=costar` to emit CO-STAR for portable or non-Claude prompts.
 
+## /promper:breakdown
+
+```
+/promper:breakdown migrate the billing service to event sourcing
+```
+
+The one-shot prompt expander: where `/promper` engineers one prompt, `breakdown` engineers the
+whole run. A batched requirements interview produces a tailored PRD; `promper classify` (the
+same deterministic trigger tables, zero LLM) breaks the work into domain nodes; beads (`bd`)
+gets an epic + per-node issues with dependencies (opt-in, non-blocking); each node inherits a
+routed persona and tool suggestions (lean map + `promper hydrate`, lean-ctx prescriptions when
+present); and every node ships as one engineered Claude-XML prompt plus a parallel-lane
+execution plan. Artifacts land in `.promper/<slug>/` (`PRD.md`, `graph.json`, `plan.md`,
+`prompts/`). Presents everything, spawns nothing — `--run` executes with the same per-node
+inline-vs-subagent decision promper uses. Flags: `--no-beads` · `--prd <path>` (ingest an
+existing spec) · `--target=portable|costar` · `--out <dir>`. Runs on Claude Code and Codex
+alike — no hook dependence, every phase has a stated degradation.
+
 ## /prim
 
 <p align="center">
@@ -78,7 +96,8 @@ promper/
     promper/SKILL.md   the "make" skill (manual path: `/promper`)
     promper-setup/SKILL.md   builds the lean routing map (wraps `promper scan`)
     prim/SKILL.md      the "evaluate / certify" skill
-  src/                 the TypeScript engine (`scan`/`hydrate`/`brief`/`gate`) — deterministic, zero LLM
+    breakdown/SKILL.md the one-shot prompt expander (PRD → domains → beads → prompts)
+  src/                 the TypeScript engine (`scan`/`hydrate`/`brief`/`gate`/`classify`) — deterministic, zero LLM
   reference/
     pe-principles.md   shared source of truth (11 principles, XML skeleton, rubric)
 ```
@@ -208,6 +227,13 @@ These same two deterministic building blocks power the hooks described in
 `promper gate "<prompt>" [--transcript <path>] [--json]` is the deep-dive-vs-follow-up
 classifier `gate-prompt.mjs` uses the same way. Both are also plain CLI commands — useful
 standalone for debugging what a hook would do, without needing a live spawn.
+
+`promper classify "<text>" [--json] [--map <dir>] [--top <n>]` is the task-text → domain
+breakdown primitive behind `/promper:breakdown`: it runs the registry trigger tables over the
+text (word-boundary, priority-ranked — the same `collectMatches` the scanner uses on agent
+descriptions), groups the hits by domain, and flags which suggested agents exist in the lean
+map. Deterministic: same text + same map → same output; no match exits 0 with
+`"unmapped": true`.
 
 **Local dev:** the two skills are symlinked into `~/.claude/skills/`, so the commands resolve directly while you hack on them (restart Claude Code to pick up new commands). The repo stays the single source of truth: the symlinks point back at `skills/promper` and `skills/prim`, so there's no second copy to drift.
 

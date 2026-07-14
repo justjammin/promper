@@ -1,6 +1,6 @@
 {
   "name": "promper",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Prompt-engineering toolkit. /promper engineers role-grounded prompts (role inherited from the routed specialist agent); /prim certifies your agents against the prompt-engineering standard.",
   "skills": "./skills/",
   "author": {
