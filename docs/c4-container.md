@@ -52,7 +52,7 @@ Three lifecycle event handlers registered in `hooks/hooks.json`, each a Node pro
 - **`UserPromptSubmit`** (`hooks/gate-prompt.mjs`, no matcher — fires on every user message): classifies "deep" vs "follow-up"; on "deep", emits a NUDGE to run `/promper` agent-walk.
 - **`PreToolUse`** (`hooks/enrich-spawn.mjs`, matcher `"Agent|Task"`): rewrites the spawn prompt via `buildBrief()` to embed the recorded routing decision, so subagents inherit a role.
 - **`PreToolUse`** (`hooks/contract-gate.mjs`, matcher `"Edit|Write|MultiEdit|NotebookEdit"`): denies edits to repo files until a fresh routing decision exists in the state file (any verdict, same repo, 60-min TTL); out-of-repo writes are never gated; fails open.
-- **`SessionEnd`** (`hooks/clear-decision.mjs`, no matcher): clears this repo's routing decision so the contract gate re-arms for the next session.
+- **`SessionEnd`** (`hooks/clear-decision.mjs`, no matcher): clears this session's routing decision (plus a TTL sweep of stale session files) so the contract gate re-arms for the next session.
 
 Full request/response JSON shapes and degrade paths: [c4-component-active-mode-hooks.md](./c4-component-active-mode-hooks.md#interfaces).
 
@@ -79,7 +79,7 @@ This container is explicitly **not** given an OpenAPI/Swagger specification. The
 - **`wshobson/agents` Claude Code plugin marketplace (GitHub)** — hard dependency, the sole source of agent persona/role data. Registered via a `claude plugin marketplace add wshobson/agents` subprocess during `bootstrap`; the CLI Engine's `scan` reads agent `.md` files from its plugin cache. Nothing in the package can substitute for this — if it can't be added, installation continues with a warning but role discovery has no other source.
 - **Local filesystem state**:
   - `~/.invoker/map/` (`index.json`, per-domain piece files, `toolkits.json`) — the lean routing map, written by `scan`, read by `hydrate`/`brief`. This is the container's only persistent "database," and it lives on the same machine as the container itself — never a remote store.
-  - `~/.invoker/state/promper-decision.json` — the hand-off file between `gate-prompt.mjs`'s nudge and `enrich-spawn.mjs`'s read, and between manual `promper brief` runs and later Agent/Task spawns; also what `contract-gate.mjs` checks before allowing repo edits and `clear-decision.mjs` removes at session end. 60-minute TTL, scoped to git repo root.
+  - `~/.invoker/state/promper-decision-<session_id>.json` (legacy global `promper-decision.json` as permanent fallback) — the hand-off file between `gate-prompt.mjs`'s nudge and `enrich-spawn.mjs`'s read, and between manual `promper brief` runs and later Agent/Task spawns; also what `contract-gate.mjs` checks before allowing repo edits and `clear-decision.mjs` removes when its own session ends (plus a TTL sweep of stale session files). 60-minute TTL, scoped to git repo root and session.
   - `~/.claude/skills/` — install target for the three skill directories.
 - **Claude Code host application** — the only process that ever invokes the Active Mode Hooks (per `hooks.json`) or loads the skill files; also the process a human is inside of when running `promper` manually via `/promper`. Without a running Claude Code session, the hook interfaces are simply never invoked (they are not a standalone service listening for anything).
 - **`claude` CLI (subprocess)** — invoked by `bin/promper.mjs`'s `bootstrap()` to register the `wshobson/agents` marketplace.

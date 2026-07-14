@@ -25,7 +25,7 @@ sequenceDiagram
     participant Claude as Main model
     participant SS as SessionStart hook<br/>(inject-contract.mjs)
     participant UPS as UserPromptSubmit hook<br/>(gate-prompt.mjs)
-    participant State as ~/.invoker/state/<br/>promper-decision.json
+    participant State as ~/.invoker/state/<br/>promper-decision-&lt;session_id&gt;.json
     participant Gate as PreToolUse hook<br/>(contract-gate.mjs)
     participant PTU as PreToolUse hook<br/>(enrich-spawn.mjs)
     participant Sub as Spawned subagent
@@ -98,15 +98,20 @@ call itself. Design properties, all deliberate:
   allows the edit. A broken gate degrades to "no gate", never to "no editing".
 - **Re-arms per session.** `clear-decision.mjs` (SessionEnd) removes this repo's decision so a
   decision written at 5:59 of a session doesn't let the next session's first edit skip the
-  walk. It checks the `repo` field first — a session ending in repo A never wipes repo B's
-  live decision. (SessionEnd, not Stop: Stop fires after every turn, which would force a
-  re-walk per turn and starve row 2 of the spawn hook.)
+  walk. Decisions are session-scoped (`promper-decision-<session_id>.json`), so a session
+  ending never wipes another live session's decision — same repo or not; it removes only its
+  own file, then sweeps any session files older than the TTL. (SessionEnd, not Stop: Stop
+  fires after every turn, which would force a re-walk per turn and starve row 2 of the spawn
+  hook.) Only when the payload carries no session_id does the legacy global
+  `promper-decision.json` apply, with the old repo-scoped delete rule.
 
 ## The hand-off, and why it can silently no-op
 
-`~/.invoker/state/promper-decision.json` is the only channel between the gate (which triggers
-routing) and the spawn hook (which inherits the result). Two things make this brittle by design,
-not by accident:
+`~/.invoker/state/promper-decision-<session_id>.json` (the hooks substitute the concrete
+session path into the injected contract; the legacy global `promper-decision.json` is the
+permanent fallback for environments without a session_id, e.g. Codex) is the only channel
+between the gate (which triggers routing) and the spawn hook (which inherits the result). Two
+things make this brittle by design, not by accident:
 
 - **60-minute TTL.** A stale decision is treated as absent, not as a wrong-but-present answer.
 - **Exact repo match** (`git rev-parse --show-toplevel`, both sides). Spawn a subagent from a

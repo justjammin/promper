@@ -8,17 +8,30 @@
 // Off switch: PROMPER_ACTIVE=0 disables this hook (pass-through, no injection).
 
 import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const HOOK_DIR = dirname(fileURLToPath(import.meta.url));
+const STATE_DIR = join(homedir(), ".invoker", "state");
+const LEGACY_STATE_PATH = join(STATE_DIR, "promper-decision.json");
+// The exact literal contract.md (and the NUDGE below) use for the decision file — the
+// substitution anchor swapped for this session's concrete path when a session_id is present.
+const STATE_PATH_ANCHOR = "~/.invoker/state/promper-decision.json";
 
 const NUDGE =
   "This looks like a new substantial task. Before answering, run the promper agent-walk " +
   "(decompose inline -> route via ~/.invoker/map -> inherit the specialist's persona -> " +
   "engineer the prompt) per the promper skill. If you route to a specialist agent, record it " +
-  "at ~/.invoker/state/promper-decision.json (verdict, repo, agent, reason, ts) so downstream " +
+  `at ${STATE_PATH_ANCHOR} (verdict, repo, agent, reason, ts) so downstream ` +
   "subagent spawns inherit that role automatically.";
+
+/** Session-scoped decision path; legacy global fallback. Keep in sync across hooks/*.mjs. */
+function decisionPath(sessionId) {
+  return typeof sessionId === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(sessionId)
+    ? join(STATE_DIR, `promper-decision-${sessionId}.json`)
+    : LEGACY_STATE_PATH;
+}
 
 function passThrough() {
   process.exit(0);
@@ -61,10 +74,16 @@ async function main() {
     /* contract.md missing — the nudge alone still stands */
   }
 
+  let context = contract ? `${NUDGE}\n\n${contract}` : NUDGE;
+  const sessionPath = decisionPath(input.session_id);
+  if (sessionPath !== LEGACY_STATE_PATH) {
+    context = context.replaceAll(STATE_PATH_ANCHOR, sessionPath);
+  }
+
   const output = {
     hookSpecificOutput: {
       hookEventName: "UserPromptSubmit",
-      additionalContext: contract ? `${NUDGE}\n\n${contract}` : NUDGE,
+      additionalContext: context,
     },
   };
   process.stdout.write(JSON.stringify(output));

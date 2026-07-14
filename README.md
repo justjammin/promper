@@ -94,14 +94,17 @@ the plugin (`hooks/hooks.json`), so the agent-walk happens without you rememberi
 | `inject-contract.mjs` | `SessionStart` | Injects the routing + execution-decision + edit-gate contract as standing context — see `hooks/contract.md`. Runs every session start (startup/resume/compact/clear). |
 | `gate-prompt.mjs` | `UserPromptSubmit` | Deterministic classifier (`promper gate`, no LLM): a session opener or a new substantial task nudges the model to run the agent-walk and record the routed agent, and re-injects the full contract (the SessionStart copy decays as context grows); an ordinary follow-up ("also...", "what about...", a short reply) stays silent. Biased toward under-triggering — it never nags. |
 | `enrich-spawn.mjs` | `PreToolUse` (matcher `Agent\|Task`) | Deterministic role-bearing brief (`promper brief`, no LLM): rewrites a subagent's prompt **only when it adds real value** — a full persona (when a routed agent name is known) or a toolkit line (for an already-named agent). A spawn with nothing to add is left completely untouched, never wrapped in empty boilerplate. |
-| `contract-gate.mjs` | `PreToolUse` (matcher `Edit\|Write\|MultiEdit\|NotebookEdit`) | The contract's teeth: denies edits to files **inside the active repo** until a fresh routing decision exists (`promper-decision.json`, any verdict, 60-min TTL, same repo root). The denial message re-delivers the contract and the exact JSON to record. Writes outside the repo (including the state file itself) are never gated, so satisfying the gate can't deadlock. Fails open on any error. |
-| `clear-decision.mjs` | `SessionEnd` | Re-arms the gate: clears this repo's routing decision when the session ends, so the next session re-runs the agent-walk before its first repo edit. Repo-scoped — never wipes a decision another repo's session just recorded. |
+| `contract-gate.mjs` | `PreToolUse` (matcher `Edit\|Write\|MultiEdit\|NotebookEdit`) | The contract's teeth: denies edits to files **inside the active repo** until a fresh routing decision exists (`promper-decision-<session_id>.json`, any verdict, 60-min TTL, same repo root; the legacy global `promper-decision.json` is accepted as a permanent fallback). The denial message re-delivers the contract and the exact JSON to record. Writes outside the repo (including the state file itself) are never gated, so satisfying the gate can't deadlock. Fails open on any error. |
+| `clear-decision.mjs` | `SessionEnd` | Re-arms the gate: clears **this session's** routing decision when the session ends, so the next session re-runs the agent-walk before its first repo edit. Session-scoped — never wipes a decision another live session still needs (same repo or not). Also sweeps session decision files older than the TTL so abandoned sessions don't accumulate state. |
 
-The hand-off between the nudge and the rewrite is `~/.invoker/state/promper-decision.json`:
-when the agent-walk (Step 7.5 in `skills/promper/SKILL.md`) routes to a specialist, it records
-`{"verdict", "repo", "agent", "reason", "ts"}` there (60-min TTL, keyed to the git repo root);
-`enrich-spawn.mjs` reads it back and inherits that exact role on the next general-purpose spawn
-in the same repo — routing happens once, in the model, and the hooks stay deterministic.
+The hand-off between the nudge and the rewrite is the session-scoped decision file
+`~/.invoker/state/promper-decision-<session_id>.json` (the hooks substitute the concrete path
+into the injected contract; environments without a session_id — e.g. Codex — use the global
+`promper-decision.json`): when the agent-walk (Step 7.5 in `skills/promper/SKILL.md`) routes to
+a specialist, it records `{"verdict", "repo", "agent", "reason", "ts"}` there (60-min TTL,
+keyed to the git repo root); `enrich-spawn.mjs` reads it back and inherits that exact role on
+the next general-purpose spawn in the same repo — routing happens once, in the model, and the
+hooks stay deterministic.
 
 **Off switch:** `PROMPER_ACTIVE=0` disables all five hooks. `/promper`, `/prim`, and
 `/promper:setup` are unaffected either way — they stay available as the manual override.

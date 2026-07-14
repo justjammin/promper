@@ -168,7 +168,10 @@ results are ~60% smaller.
 
 Report format: `node-1 → inline (light)` · `node-2 → subagent backend-developer (noisy, parallel)`.
 
-Record the decision at `~/.invoker/state/promper-decision.json` —
+Record the decision at the decision path given in the injected orchestration contract — it is
+session-scoped (`~/.invoker/state/promper-decision-<session_id>.json`) so concurrent sessions
+never clobber each other. When no path was injected (Codex, hooks disabled, no contract in
+context), fall back to the global `~/.invoker/state/promper-decision.json` —
 `{"verdict":"inline"|"agent"|"mixed","repo":"<repo root>","agent":"<routed agent name>","reason":"<one line>","ts":<epoch ms>}`.
 `repo` is the git repo root (`git rev-parse --show-toplevel`; fall back to cwd outside a git
 repo) — the deterministic spawn hook compares against this exact value, so an inconsistent cwd

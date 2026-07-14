@@ -92,8 +92,10 @@ retire a redundant reminder. Leave them in place until/unless promper ships its 
 enforcement hook.
 
 > **Update:** the plugin now ships that enforcement — `hooks/contract-gate.mjs` (PreToolUse on
-> `Edit|Write|MultiEdit|NotebookEdit`, denies repo edits until a fresh `promper-decision.json`
-> exists) plus `hooks/clear-decision.mjs` (SessionEnd re-arm). Semantics differ slightly from
+> `Edit|Write|MultiEdit|NotebookEdit`, denies repo edits until a fresh session-scoped
+> `promper-decision-<session_id>.json` exists; the legacy global `promper-decision.json` is a
+> permanent fallback) plus `hooks/clear-decision.mjs` (SessionEnd re-arm, own session's file
+> only, plus a stale-file sweep). Semantics differ slightly from
 > the personal pair: the shipped gate accepts a fresh decision of **any** verdict (it can't
 > distinguish subagent edits, so blocking `verdict:"agent"` would lock out the routed
 > specialist), and needs no `invoker-mark.js`-style subagent marking. Once the plugin gate is

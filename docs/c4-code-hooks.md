@@ -93,7 +93,7 @@ This hooks layer is the runtime enforcement of promper's orchestration philosoph
     agent: null,
     subagentType: string | null,
     mapDir: string,  // ~/.invoker/map
-    statePath: string,  // ~/.invoker/state/promper-decision.json
+    statePath: string,  // ~/.invoker/state/promper-decision-<session_id>.json when present, else the legacy global file
     json: true
   }
   ```
@@ -205,12 +205,13 @@ This hooks layer is the runtime enforcement of promper's orchestration philosoph
 
 **File**: `/Users/jammin/Documents/GitHub/promper/hooks/contract-gate.mjs`
 
-**Purpose**: PreToolUse hook (matcher `Edit|Write|MultiEdit|NotebookEdit`) — the contract's enforcement layer. Denies edits to files inside the active repo root until a fresh routing decision exists at `~/.invoker/state/promper-decision.json` (valid verdict, same repo root, 60-min TTL — same freshness rules as `src/brief.ts`). The deny reason re-delivers the contract summary plus the literal decision JSON to write. Self-contained (no `dist/` import). Deterministic. No LLM.
+**Purpose**: PreToolUse hook (matcher `Edit|Write|MultiEdit|NotebookEdit`) — the contract's enforcement layer. Denies edits to files inside the active repo root until a fresh routing decision exists at the session-scoped `~/.invoker/state/promper-decision-<session_id>.json` (valid verdict, same repo root, 60-min TTL — same freshness rules as `src/brief.ts`); the legacy global `promper-decision.json` is accepted as a permanent fallback for payloads without a session_id. The deny reason re-delivers the contract summary plus the literal decision JSON to write at the session path. Self-contained (no `dist/` import). Deterministic. No LLM.
 
 **Key functions**:
 - `gitRoot(): string` — repo root via `git rev-parse --show-toplevel`, cwd fallback (mirrors brief.ts)
-- `decisionSatisfies(repoRoot): boolean` — parse + validate the decision file (verdict ∈ {inline, agent, mixed}, repo match, TTL)
-- `denyMessage(repoRoot): string` — contract summary + exact JSON schema, repo root interpolated
+- `decisionPath(sessionId): string` — session-scoped decision path, legacy global fallback (duplicated across hooks by design)
+- `decisionSatisfies(repoRoot, paths): boolean` — parse + validate the first satisfying decision file among candidates (verdict ∈ {inline, agent, mixed}, repo match, TTL)
+- `denyMessage(repoRoot, statePath): string` — contract summary + exact JSON schema, repo root and session state path interpolated
 - `main()` — off-switch check → stdin parse → tool/target extraction → repo-containment check → allow or structured deny (`permissionDecision: "deny"`)
 
 **Design invariants**:
@@ -224,7 +225,7 @@ This hooks layer is the runtime enforcement of promper's orchestration philosoph
 
 **File**: `/Users/jammin/Documents/GitHub/promper/hooks/clear-decision.mjs`
 
-**Purpose**: SessionEnd hook — re-arms the contract gate by deleting `promper-decision.json` when the session ends, so a decision's remaining TTL never carries into a fresh session. Repo-scoped: only clears a decision whose `repo` matches this session's repo root (or an unparseable file); never wipes another repo's live decision. SessionEnd rather than Stop — Stop fires after every turn, which would force a re-walk per turn and starve the spawn hook's row 2.
+**Purpose**: SessionEnd hook — re-arms the contract gate by deleting this session's `promper-decision-<session_id>.json` when the session ends, so a decision's remaining TTL never carries into a fresh session. Session-scoped: removes only its own file, then sweeps session decision files whose mtime is past the TTL (abandoned sessions never accumulate state). Without a session_id on the payload it falls back to the legacy global file with the old repo-scoped rule (only clears a decision whose `repo` matches this session's repo root, or an unparseable file). SessionEnd rather than Stop — Stop fires after every turn, which would force a re-walk per turn and starve the spawn hook's row 2.
 
 ---
 
@@ -308,8 +309,8 @@ This hooks layer is the runtime enforcement of promper's orchestration philosoph
 **Contents**: 
 - Routing overview: decompose inline → route via `~/.invoker/map/` → inherit persona
 - Execution decision rules: <5K tokens expected noise → inline; noisy/parallel → spawn agent
-- Routing hand-off spec: write `~/.invoker/state/promper-decision.json` before direct edits
-- Edit gate enforcement: repo edits denied by contract-gate.mjs until a fresh decision (any verdict) exists; cleared at session end
+- Routing hand-off spec: write the session-scoped decision path (the `~/.invoker/state/promper-decision.json` literal is a substitution anchor the injecting hooks replace with `promper-decision-<session_id>.json`) before direct edits
+- Edit gate enforcement: repo edits denied by contract-gate.mjs until a fresh decision (any verdict) exists in the session file or the legacy global fallback; each session's decision is cleared when that session ends
 - Off-switch: `PROMPER_ACTIVE=0` disables all automatic hooks
 
 ---
@@ -335,7 +336,7 @@ All Node.js built-in modules (zero npm dependencies by design):
 - **node:fs** (enrich-spawn.mjs, inject-contract.mjs, gate-prompt.mjs, contract-gate.mjs, clear-decision.mjs)
   - `appendFileSync()` — write debug log lines
   - `readFileSync()` — read contract.md (session start + deep-prompt re-injection), read promper-decision.json
-  - `unlinkSync()` — remove promper-decision.json at session end
+  - `unlinkSync()` — remove this session's promper-decision-<session_id>.json at session end (plus TTL sweep)
 
 - **node:os** (enrich-spawn.mjs, contract-gate.mjs, clear-decision.mjs)
   - `homedir()` — resolve `~/.invoker/map/` and `~/.invoker/state/`
@@ -434,7 +435,7 @@ sequenceDiagram
    - Call `dist/brief.js` to rewrite prompt with role context
    - Return rewritten prompt so subagent inherits persona
 
-**Key Insight**: The state file (`~/.invoker/state/promper-decision.json`) is the hand-off bridge. gate-prompt writes it (user records decision), enrich-spawn reads it (subagent spawn inherits role). No direct coupling between hooks — all decoupled via filesystem.
+**Key Insight**: The session-scoped state file (`~/.invoker/state/promper-decision-<session_id>.json`; legacy global as fallback) is the hand-off bridge. gate-prompt writes it (user records decision), enrich-spawn reads it (subagent spawn inherits role). No direct coupling between hooks — all decoupled via filesystem.
 
 ---
 

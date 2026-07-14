@@ -5,7 +5,7 @@
 //
 // Off switch: PROMPER_ACTIVE=0 disables this hook (pass-through, no mutation).
 
-import { appendFileSync } from "node:fs";
+import { appendFileSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,6 +13,15 @@ import { fileURLToPath } from "node:url";
 const HOOK_DIR = dirname(fileURLToPath(import.meta.url));
 const READ_ONLY_SPAWNS = new Set(["Explore", "Plan"]);
 const ENGINEERED_MARKER = "<instructions>";
+const STATE_DIR = join(homedir(), ".invoker", "state");
+const LEGACY_STATE_PATH = join(STATE_DIR, "promper-decision.json");
+
+/** Session-scoped decision path; legacy global fallback. Keep in sync across hooks/*.mjs. */
+function decisionPath(sessionId) {
+  return typeof sessionId === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(sessionId)
+    ? join(STATE_DIR, `promper-decision-${sessionId}.json`)
+    : LEGACY_STATE_PATH;
+}
 
 // Debug trace: set PROMPER_DEBUG_LOG=<path> to append one JSON line per decision.
 // No-op (and zero cost) when unset — this hook otherwise has no observable side channel.
@@ -62,6 +71,12 @@ async function main() {
     return passThrough("dist-missing"); // dev checkout without a build — degrade silently
   }
 
+  // Prefer this session's decision file; fall back to the legacy global slot when the
+  // session-scoped file was never written (older contract text, Codex, no session_id).
+  const sessionPath = decisionPath(input.session_id);
+  const statePath =
+    sessionPath !== LEGACY_STATE_PATH && existsSync(sessionPath) ? sessionPath : LEGACY_STATE_PATH;
+
   let result;
   try {
     result = await buildBrief({
@@ -69,7 +84,7 @@ async function main() {
       agent: null,
       subagentType,
       mapDir: join(homedir(), ".invoker", "map"),
-      statePath: join(homedir(), ".invoker", "state", "promper-decision.json"),
+      statePath,
       json: true,
     });
   } catch (err) {
