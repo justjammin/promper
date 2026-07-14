@@ -46,17 +46,22 @@ The default skeleton is Claude-native XML. Pass `--target=costar` to emit CO-STA
 /promper:breakdown migrate the billing service to event sourcing
 ```
 
-The one-shot prompt expander: where `/promper` engineers one prompt, `breakdown` engineers the
-whole run. A batched requirements interview produces a tailored PRD; `promper classify` (the
-same deterministic trigger tables, zero LLM) breaks the work into domain nodes; beads (`bd`)
-gets an epic + per-node issues with dependencies (opt-in, non-blocking); each node inherits a
-routed persona and tool suggestions (lean map + `promper hydrate`, lean-ctx prescriptions when
-present); and every node ships as one engineered Claude-XML prompt plus a parallel-lane
-execution plan. Artifacts land in `.promper/<slug>/` (`PRD.md`, `graph.json`, `plan.md`,
-`prompts/`). Presents everything, spawns nothing — `--run` executes with the same per-node
-inline-vs-subagent decision promper uses. Flags: `--no-beads` · `--prd <path>` (ingest an
-existing spec) · `--target=portable|costar` · `--out <dir>`. Runs on Claude Code and Codex
-alike — no hook dependence, every phase has a stated degradation.
+The one-shot prompt expander. `/promper` engineers one prompt; `breakdown` engineers the
+whole run. It starts with a batched requirements interview and turns your answers into a
+PRD. From there, `promper classify` (the same deterministic trigger tables, zero LLM) splits
+the work into domain nodes. If beads (`bd`) is installed, breakdown files an epic plus
+per-node issues with dependencies; that part is opt-in and never blocks the run. Each node
+inherits a routed persona and tool suggestions (lean map plus `promper hydrate`, with
+lean-ctx prescriptions when present) and ends up as one engineered Claude-XML prompt with a
+parallel-lane execution plan.
+
+Artifacts land in `.promper/<slug>/`: `PRD.md`, `graph.json`, `plan.md`, and `prompts/`.
+Breakdown presents everything and spawns nothing. When you're ready, `--run` executes the
+plan with the same per-node inline-vs-subagent decision `/promper` uses.
+
+Flags: `--no-beads` · `--prd <path>` (ingest an existing spec) · `--target=portable|costar` ·
+`--out <dir>`. It runs on Claude Code and Codex alike; nothing depends on hooks, and every
+phase states how it degrades when something is missing.
 
 ## /prim
 

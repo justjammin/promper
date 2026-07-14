@@ -1,0 +1,44 @@
+# promper breakdown
+
+> breakdown is the one-shot prompt expander in the promper toolkit for AI coding agents.
+> One rough sentence in, a fully engineered, ready-to-run plan out. It runs on Claude Code
+> and Codex, is free and Apache-2.0 licensed, and spawns nothing until you say go.
+
+## What breakdown does
+
+Where `/promper` engineers a single prompt, `breakdown` engineers the whole run, in six moves:
+
+1. A batched requirements interview turns your answers into a PRD (or ingest a spec with `--prd`).
+2. `promper classify` splits the PRD into domain nodes using fixed trigger tables with zero AI,
+   so the same input always produces the same breakdown.
+3. With Beads (`bd`) installed, the run is filed as an epic plus one issue per node with
+   dependencies wired in (opt-in, non-blocking, `--no-beads` to skip).
+4. Each node is routed to a specialist agent and inherits that agent's real persona and toolkit;
+   Lean CTX context prescriptions are folded in when present.
+5. Each node ships as one engineered Claude-native prompt (role, context, instructions,
+   constraints, output format). `--target=costar` emits portable prompts instead.
+6. You get a parallel-lane execution plan and nothing spawns. `--run` executes it, deciding
+   per node between inline work and a subagent.
+
+## Artifacts
+
+Every run lands on disk in `.promper/<slug>/`:
+
+- `PRD.md` — the written spec
+- `graph.json` — nodes and dependencies
+- `plan.md` — the parallel-lane plan
+- `prompts/` — one engineered prompt per node
+
+## Optional dependencies
+
+- Beads (steveyegge/beads) — git-native, dependency-aware issue tracker for AI agents.
+- Lean CTX (yvgude/lean-ctx) — context layer that decides what an agent reads and compresses
+  what it sends.
+
+Both are independent open-source projects; breakdown integrates with them but ships without either.
+
+## Links
+
+- Site: https://promper.justjammin.workers.dev/
+- Source: https://github.com/justjammin/promper
+- License: Apache-2.0
