@@ -15,6 +15,9 @@
  * Three agent sources, in this scan order (earlier sources win name collisions):
  *   1. `--plugins <root>` — wshobson-style marketplaces: `<root>/plugins/<plugin>/agents/*.md`.
  *      Entries carry a `plugin` field; persona fetch also lists that plugin's skills/+commands/.
+ *      Only plugins listed as installed in `~/.claude/plugins/installed_plugins.json` are
+ *      scanned — a marketplace checkout ships every plugin it publishes, not just the ones
+ *      the user enabled. See `loadInstalledPluginKeys()`.
  *   2. `--categories <root>` — category-flat agent repos: `<root>/<category>/*.md`, no nested
  *      `agents/` folder and no per-category toolkit (e.g. awesome-claude-code-subagents,
  *      agency-agents). No `plugin` field.
@@ -27,6 +30,8 @@
  *     agents are never moved between domains and domains are never renamed.
  *   - Only agents not already present are classified (ported taxonomy).
  *   - Agents whose source file vanished are dropped and reported.
+ *   - Agents whose plugin was uninstalled since the last scan are also dropped and
+ *     reported, even though the marketplace checkout still has their files on disk.
  *   - Output is fully sorted so re-runs are byte-identical.
  */
 
@@ -197,13 +202,97 @@ async function scanDirs(
 }
 
 /**
+ * Reads Claude Code's own record of which plugins the user actually installed
+ * (`~/.claude/plugins/installed_plugins.json`, keyed `"<plugin>@<marketplace>"`).
+ * A marketplace root (e.g. wshobson/agents) can carry far more plugins than any one
+ * user has installed — scanning every plugin dir would map agents the user can't
+ * even invoke. Returns null when the file is missing/unreadable so callers fall back
+ * to unfiltered scanning (e.g. non-Claude-Code environments).
+ */
+async function loadInstalledPluginKeys(): Promise<Set<string> | null> {
+  let raw: string;
+  try {
+    raw = await fs.readFile(path.join(homedir(), ".claude", "plugins", "installed_plugins.json"), "utf8");
+  } catch {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(raw) as { plugins?: unknown };
+    if (typeof parsed.plugins !== "object" || parsed.plugins === null) return null;
+    return new Set(Object.keys(parsed.plugins));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Reads `~/.claude/plugins/known_marketplaces.json` — keyed by marketplace name, each
+ * entry carrying the exact `installLocation` Claude Code cloned it to. Returns a map from
+ * resolved `installLocation` -> marketplace name.
+ *
+ * This, not `path.basename(root)`, is the correct way to ask "is this `--plugins` root a
+ * marketplace Claude Code tracks installs for, and if so what's its registered name?":
+ *   - A basename guess gives a false POSITIVE for a raw git clone that happens to share a
+ *     marketplace's directory name (the README's own `--plugins ~/Documents/GitHub/
+ *     wshobson-agents` example isn't the registered `claude-code-workflows` marketplace).
+ *   - Deriving "recognized" from which marketplace names *currently appear* in
+ *     installed_plugins.json's "@suffix"es gives a false NEGATIVE the moment a
+ *     marketplace's last remaining plugin gets uninstalled: its suffix vanishes from that
+ *     file entirely, so a suffix-presence check would then treat the whole marketplace as
+ *     unrecognized and fall back to scanning it unfiltered — the opposite of what
+ *     uninstalling everything from it should do (scan zero plugins from it).
+ * Matching on the registered installLocation has neither failure mode.
+ */
+async function loadKnownMarketplaces(): Promise<Map<string, string> | null> {
+  let raw: string;
+  try {
+    raw = await fs.readFile(path.join(homedir(), ".claude", "plugins", "known_marketplaces.json"), "utf8");
+  } catch {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const byPath = new Map<string, string>();
+    for (const [name, value] of Object.entries(parsed)) {
+      if (typeof value !== "object" || value === null) continue;
+      const loc = (value as Record<string, unknown>)["installLocation"];
+      if (typeof loc === "string" && loc.trim()) byPath.set(path.resolve(loc), name);
+    }
+    return byPath.size > 0 ? byPath : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolves a `--plugins <root>` to its registered marketplace name, or null when the root
+ * isn't a marketplace Claude Code tracks (unfiltered-scan case).
+ */
+function resolveMarketplaceName(root: string, known: Map<string, string> | null): string | null {
+  return known?.get(path.resolve(root)) ?? null;
+}
+
+/**
  * Scan plugin-marketplace roots (wshobson/agents layout): `<root>/plugins/<plugin>/agents/*.md`.
  * Entries record the owning `plugin` and a root-relative `file` path so persona fetch (and the
  * plugin's skills/ + commands/) resolve from the root stored in index.json. Frontmatter names
  * are typically plugin-prefixed ("backend-development-backend-architect"), so classification
  * uses the prefix-stripped file stem, which hits the name table.
+ *
+ * For roots resolved to a registered marketplace (see `loadKnownMarketplaces()`), only
+ * plugins the user has actually installed from it are scanned. Roots that aren't a
+ * registered marketplace (a raw checkout Claude Code never cloned itself) scan unfiltered,
+ * same as before this filter existed. Filtered-out `"<plugin>@<marketplace>"` keys are
+ * recorded in `excludedPluginKeys` so `runScan` can drop stale map entries for plugins that
+ * were uninstalled since the last scan, instead of reviving them via the stale-file fallback.
  */
-async function scanPluginRoots(roots: string[], agents: Map<string, ScannedAgent>): Promise<void> {
+async function scanPluginRoots(
+  roots: string[],
+  agents: Map<string, ScannedAgent>,
+  excludedPluginKeys: Set<string>,
+): Promise<void> {
+  const installed = await loadInstalledPluginKeys();
+  const known = await loadKnownMarketplaces();
   for (const root of roots) {
     const pluginsDir = path.join(root, "plugins");
     let pluginNames: string[];
@@ -213,7 +302,12 @@ async function scanPluginRoots(roots: string[], agents: Map<string, ScannedAgent
       continue;
     }
     pluginNames.sort();
+    const marketplace = resolveMarketplaceName(root, known);
     for (const plugin of pluginNames) {
+      if (installed !== null && marketplace !== null && !installed.has(`${plugin}@${marketplace}`)) {
+        excludedPluginKeys.add(`${plugin}@${marketplace}`);
+        continue;
+      }
       const agentsDir = path.join(pluginsDir, plugin, "agents");
       let fileNames: string[];
       try {
@@ -413,8 +507,12 @@ async function scanCommandFiles(commandsDir: string, root: string): Promise<Tool
  * of how many domains that plugin's agents land in. Safe to pass category-flat roots too — a
  * missing plugins/ dir just yields nothing (try/catch), so this can reuse the same root union
  * the agent-reconciliation pass uses without needing a separate plugin-vs-category root registry.
+ * Same installed-only filter as `scanPluginRoots` — an uninstalled plugin's skills/commands
+ * aren't reachable at spawn time, so indexing them is dead weight.
  */
 async function scanToolkits(roots: string[]): Promise<Map<string, PluginToolkitData>> {
+  const installed = await loadInstalledPluginKeys();
+  const known = await loadKnownMarketplaces();
   const toolkits = new Map<string, PluginToolkitData>();
   for (const root of roots) {
     const pluginsDir = path.join(root, "plugins");
@@ -425,7 +523,9 @@ async function scanToolkits(roots: string[]): Promise<Map<string, PluginToolkitD
       continue;
     }
     pluginNames.sort();
+    const marketplace = resolveMarketplaceName(root, known);
     for (const plugin of pluginNames) {
+      if (installed !== null && marketplace !== null && !installed.has(`${plugin}@${marketplace}`)) continue;
       if (toolkits.has(plugin)) continue; // first root wins, same collision rule as agents
       const skills = await scanSkillDirs(path.join(pluginsDir, plugin, "skills"), root);
       const commands = await scanCommandFiles(path.join(pluginsDir, plugin, "commands"), root);
@@ -671,7 +771,8 @@ export async function runScan(argv: string[]): Promise<void> {
   const dirs = [...(opts.noDefaults ? [] : defaultScanDirs()), ...opts.extraDirs];
 
   const scanned = new Map<string, ScannedAgent>();
-  await scanPluginRoots(opts.pluginRoots, scanned); // plugin + category roots win name collisions
+  const excludedPluginKeys = new Set<string>(); // "<plugin>@<marketplace>" filtered out as not-installed
+  await scanPluginRoots(opts.pluginRoots, scanned, excludedPluginKeys); // plugin + category roots win name collisions
   await scanCategoryRoots(opts.categoryRoots, scanned);
   await scanDirs(dirs, scanned);
   const existing = await loadExisting(opts.outDir);
@@ -682,11 +783,29 @@ export async function runScan(argv: string[]): Promise<void> {
   // genuinely vanished — never merely because this invocation didn't repeat every historical
   // root flag. Revive it into `scanned` so merge()'s existing-assignment check keeps it; the
   // piece entry (not this placeholder) still supplies its description/file/model/plugin.
+  //
+  // Exception: an entry whose plugin was filtered out this run as not-installed (present in
+  // excludedPluginKeys) is never revived, even though its source .md file still physically
+  // exists in the marketplace checkout — uninstalling a plugin doesn't delete the marketplace's
+  // copy of it. Skipping revival here routes it through merge()'s normal "source vanished" path
+  // so it surfaces in the `dropped` report instead of lingering in the map forever.
   if (existing) {
+    const known = await loadKnownMarketplaces();
     for (const name of existing.assignments.keys()) {
       if (scanned.has(name)) continue;
       const entry = existing.entries.get(name);
-      if (!entry || !(await fileStillExists(entry.file, allRoots))) continue;
+      if (!entry) continue;
+      const entryPlugin = entry.plugin;
+      if (
+        typeof entryPlugin === "string" &&
+        opts.pluginRoots.some((root) => {
+          const marketplace = resolveMarketplaceName(root, known);
+          return marketplace !== null && excludedPluginKeys.has(`${entryPlugin}@${marketplace}`);
+        })
+      ) {
+        continue;
+      }
+      if (!(await fileStillExists(entry.file, allRoots))) continue;
       const revived: ScannedAgent = {
         name,
         description: entry.description,

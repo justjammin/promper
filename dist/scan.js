@@ -3367,7 +3367,47 @@ async function scanDirs(dirs, agents = /* @__PURE__ */ new Map()) {
   }
   return agents;
 }
-async function scanPluginRoots(roots, agents) {
+async function loadInstalledPluginKeys() {
+  let raw;
+  try {
+    raw = await fs.readFile(path.join(homedir(), ".claude", "plugins", "installed_plugins.json"), "utf8");
+  } catch {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    if (typeof parsed.plugins !== "object" || parsed.plugins === null) return null;
+    return new Set(Object.keys(parsed.plugins));
+  } catch {
+    return null;
+  }
+}
+async function loadKnownMarketplaces() {
+  let raw;
+  try {
+    raw = await fs.readFile(path.join(homedir(), ".claude", "plugins", "known_marketplaces.json"), "utf8");
+  } catch {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    const byPath = /* @__PURE__ */ new Map();
+    for (const [name, value] of Object.entries(parsed)) {
+      if (typeof value !== "object" || value === null) continue;
+      const loc = value["installLocation"];
+      if (typeof loc === "string" && loc.trim()) byPath.set(path.resolve(loc), name);
+    }
+    return byPath.size > 0 ? byPath : null;
+  } catch {
+    return null;
+  }
+}
+function resolveMarketplaceName(root, known) {
+  return known?.get(path.resolve(root)) ?? null;
+}
+async function scanPluginRoots(roots, agents, excludedPluginKeys) {
+  const installed = await loadInstalledPluginKeys();
+  const known = await loadKnownMarketplaces();
   for (const root of roots) {
     const pluginsDir = path.join(root, "plugins");
     let pluginNames;
@@ -3377,7 +3417,12 @@ async function scanPluginRoots(roots, agents) {
       continue;
     }
     pluginNames.sort();
+    const marketplace = resolveMarketplaceName(root, known);
     for (const plugin of pluginNames) {
+      if (installed !== null && marketplace !== null && !installed.has(`${plugin}@${marketplace}`)) {
+        excludedPluginKeys.add(`${plugin}@${marketplace}`);
+        continue;
+      }
       const agentsDir = path.join(pluginsDir, plugin, "agents");
       let fileNames;
       try {
@@ -3533,6 +3578,8 @@ async function scanCommandFiles(commandsDir, root) {
   return entries;
 }
 async function scanToolkits(roots) {
+  const installed = await loadInstalledPluginKeys();
+  const known = await loadKnownMarketplaces();
   const toolkits = /* @__PURE__ */ new Map();
   for (const root of roots) {
     const pluginsDir = path.join(root, "plugins");
@@ -3543,7 +3590,9 @@ async function scanToolkits(roots) {
       continue;
     }
     pluginNames.sort();
+    const marketplace = resolveMarketplaceName(root, known);
     for (const plugin of pluginNames) {
+      if (installed !== null && marketplace !== null && !installed.has(`${plugin}@${marketplace}`)) continue;
       if (toolkits.has(plugin)) continue;
       const skills = await scanSkillDirs(path.join(pluginsDir, plugin, "skills"), root);
       const commands = await scanCommandFiles(path.join(pluginsDir, plugin, "commands"), root);
@@ -3723,16 +3772,26 @@ async function runScan(argv) {
   const opts = parseArgs(argv);
   const dirs = [...opts.noDefaults ? [] : defaultScanDirs(), ...opts.extraDirs];
   const scanned = /* @__PURE__ */ new Map();
-  await scanPluginRoots(opts.pluginRoots, scanned);
+  const excludedPluginKeys = /* @__PURE__ */ new Set();
+  await scanPluginRoots(opts.pluginRoots, scanned, excludedPluginKeys);
   await scanCategoryRoots(opts.categoryRoots, scanned);
   await scanDirs(dirs, scanned);
   const existing = await loadExisting(opts.outDir);
   const allRoots = [.../* @__PURE__ */ new Set([...opts.pluginRoots, ...opts.categoryRoots, ...existing?.roots ?? []])];
   if (existing) {
+    const known = await loadKnownMarketplaces();
     for (const name of existing.assignments.keys()) {
       if (scanned.has(name)) continue;
       const entry = existing.entries.get(name);
-      if (!entry || !await fileStillExists(entry.file, allRoots)) continue;
+      if (!entry) continue;
+      const entryPlugin = entry.plugin;
+      if (typeof entryPlugin === "string" && opts.pluginRoots.some((root) => {
+        const marketplace = resolveMarketplaceName(root, known);
+        return marketplace !== null && excludedPluginKeys.has(`${entryPlugin}@${marketplace}`);
+      })) {
+        continue;
+      }
+      if (!await fileStillExists(entry.file, allRoots)) continue;
       const revived = {
         name,
         description: entry.description,

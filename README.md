@@ -163,6 +163,14 @@ exists — only a genuinely-vanished file gets dropped. Flags: `--check` (dry ru
 skills/commands indexed once, by description, for the routing suggestions in Step 5 of
 `skills/promper/SKILL.md`.
 
+`--plugins` only scans plugins the user has actually installed from that marketplace, per
+Claude Code's own `~/.claude/plugins/installed_plugins.json` — a marketplace checkout carries
+every plugin it publishes, not just the ones enabled locally, so scanning all of them would
+map agents you can't invoke. Uninstalling a plugin drops its agents from the map on the next
+scan even though the marketplace checkout still has the files on disk. Falls back to
+unfiltered scanning when that file is missing or unreadable (non-Claude-Code environments,
+hand-rolled `--plugins` roots).
+
 **Plugin marketplaces as the role source:** point the scanner at a marketplace checkout —
 e.g. [wshobson/agents](https://github.com/wshobson/agents) (88 plugins, ~194 agents, each
 plugin bundling `agents/ + skills/ + commands/`):
