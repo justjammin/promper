@@ -1,6 +1,6 @@
 {
   "name": "promper",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Prompt-engineering toolkit. Engineer role-grounded prompts, compile finite project graphs, run bounded goal-directed graph execution to evidence-backed convergence, and certify agent prompts.",
   "skills": "./skills/",
   "hooks": "./hooks/hooks.json",

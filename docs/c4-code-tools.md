@@ -345,7 +345,7 @@ Two plugin registries (.claude-plugin, .codex-plugin) need identical metadata ex
 - **Repository**: https://github.com/justjammin/promper
 - **Author**: Jamin Echols
 - **License**: Apache-2.0
-- **Package Version**: 0.1.0 (from package.json; used as single source for all manifests)
+- **Package Version**: 0.4.0 (from package.json; used as single source for all manifests)
 - **Node.js Requirement**: >=18
 
 ## Related Documentation
