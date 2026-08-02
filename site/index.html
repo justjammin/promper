@@ -109,10 +109,45 @@
   a:hover{color:#5a1622}
   ::selection{background:#e4c6a8}
   @keyframes promper-wiggle{0%,100%{transform:rotate(-15deg)}50%{transform:rotate(15deg)}}
+  .singularity-shell{position:relative;height:190vh;width:100vw;margin-left:calc(50% - 50vw);overflow:clip;background:#030307;color:#f4efe6;isolation:isolate}
+  .singularity-stage{position:sticky;top:0;min-height:100svh;display:flex;align-items:center;overflow:hidden;background:radial-gradient(circle at 66% 48%,#171019 0,#07070d 34%,#030307 72%)}
+  .singularity-canvas,.singularity-fallback,.singularity-vignette{position:absolute;inset:0;width:100%;height:100%}
+  .singularity-canvas{display:block;z-index:1;opacity:.94;transform-origin:66% 50%;will-change:transform,opacity}
+  .singularity-fallback{z-index:0;background:radial-gradient(circle at 66% 49%,#000 0 8%,#ff6a20 8.6%,#6f1c14 10%,transparent 18%),radial-gradient(ellipse at 66% 50%,transparent 0 7%,rgba(255,145,64,.78) 9%,rgba(116,35,35,.35) 15%,transparent 28%)}
+  .has-webgl .singularity-fallback{opacity:.15}
+  .singularity-vignette{z-index:2;pointer-events:none;background:linear-gradient(90deg,rgba(3,3,7,.98) 0,rgba(3,3,7,.8) 32%,rgba(3,3,7,.06) 69%,rgba(3,3,7,.72) 100%),linear-gradient(180deg,#030307 0,transparent 20%,transparent 78%,#030307 100%)}
+  .singularity-copy{position:relative;z-index:3;width:min(1140px,100%);margin:0 auto;padding:clamp(72px,10vw,124px) 32px;will-change:transform,opacity}
+  .singularity-copy-inner{max-width:600px}
+  .singularity-kicker{font-family:'JetBrains Mono',monospace;font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;color:#e39a6d;margin-bottom:20px}
+  .singularity-title{font-family:'Newsreader',serif;font-weight:500;font-size:clamp(48px,7.5vw,92px);line-height:.94;letter-spacing:-.025em;margin:0 0 26px;text-wrap:balance}
+  .singularity-lede{font-size:17px;line-height:1.65;color:rgba(244,239,230,.76);max-width:570px;margin:0 0 30px;text-wrap:pretty}
+  .singularity-command{font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.55;padding:15px 18px;border:1px solid rgba(227,154,109,.28);border-radius:10px;background:rgba(7,7,13,.62);color:#f2c6a9;overflow-x:auto;white-space:nowrap;backdrop-filter:blur(12px)}
+  .singularity-orbit{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:32px;max-width:580px}
+  .singularity-shape{padding:11px 12px;border-top:1px solid rgba(244,239,230,.22);font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.06em;color:rgba(244,239,230,.62);will-change:transform,opacity}
+  .singularity-orbit-line{height:1px;margin-top:28px;background:rgba(244,239,230,.14);overflow:hidden;max-width:580px}
+  .singularity-orbit-fill{width:100%;height:100%;background:linear-gradient(90deg,#8f2730,#e39a6d,#f3d7b7);transform:scaleX(0);transform-origin:left center;will-change:transform}
+  .singularity-boundary{margin-top:16px;font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:rgba(244,239,230,.48)}
   @media (max-width:720px){
     div[style*="grid-template-columns:1fr 1fr"],
     div[style*="grid-template-columns:1fr 1.15fr"],
     div[style*="grid-template-columns:repeat(3,1fr)"]{grid-template-columns:1fr!important}
+    .site-nav{gap:14px!important;font-size:12px!important}
+    .site-nav a:nth-child(2),.site-nav a:nth-child(3){display:none}
+    .singularity-shell{height:170vh}
+    .singularity-stage{align-items:flex-end}
+    .singularity-copy{padding:72px 24px 86px}
+    .singularity-copy-inner{max-width:100%}
+    .singularity-title{max-width:520px}
+    .singularity-command{white-space:normal;overflow-wrap:anywhere}
+    .singularity-vignette{background:linear-gradient(180deg,rgba(3,3,7,.12) 0,rgba(3,3,7,.44) 36%,#030307 72%)}
+    .singularity-canvas{height:66%;transform-origin:58% 32%}
+    .singularity-fallback{background-position:58% 25%,58% 25%}
+    .singularity-orbit{grid-template-columns:repeat(2,minmax(0,1fr))}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .singularity-shell{height:auto}
+    .singularity-stage{position:relative;min-height:900px}
+    .singularity-canvas,.singularity-copy,.singularity-shape,.singularity-orbit-fill{will-change:auto!important}
   }
 </style>
 </head>
@@ -125,10 +160,11 @@
       <span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:#7a2230">promper</span>
       <span style="font-size:12px;color:rgba(28,24,21,.5)">prim &amp; proper prompts, all the time</span>
     </div>
-    <div style="display:flex;gap:26px;font-size:13.5px;color:rgba(28,24,21,.65)">
+    <div class="site-nav" style="display:flex;gap:26px;font-size:13.5px;color:rgba(28,24,21,.65)">
       <a href="#how" style="color:inherit">How it works</a>
       <a href="#deps" style="color:inherit">Dependencies</a>
       <a href="#why" style="color:inherit">Why it matters</a>
+      <a href="#singularity" style="color:inherit">Singularity</a>
     </div>
   </div>
 
@@ -304,6 +340,31 @@
     </div>
   </div>
 
+  <!-- ===== SINGULARITY ===== -->
+  <section id="singularity" class="singularity-shell" aria-labelledby="singularity-title">
+    <div class="singularity-stage">
+      <div class="singularity-fallback" aria-hidden="true"></div>
+      <canvas id="singularity-canvas" class="singularity-canvas" aria-hidden="true"></canvas>
+      <div class="singularity-vignette" aria-hidden="true"></div>
+      <div class="singularity-copy">
+        <div class="singularity-copy-inner">
+          <div class="singularity-kicker">New runtime · bounded by design</div>
+          <h2 id="singularity-title" class="singularity-title">A graph that can admit it is not done.</h2>
+          <p class="singularity-lede"><code style="font-family:'JetBrains Mono',monospace;color:#f2c6a9">/promper:singularity</code> executes the ready work, keeps the evidence, and checks the result against criteria you can read. When a real gap remains, it adds the smallest node that could close it. The run stops when the proof is there or a hard limit says it is time to stop.</p>
+          <div class="singularity-command">/promper:singularity ship the migration safely --run</div>
+          <div class="singularity-orbit" aria-label="Built-in agent shapes">
+            <div class="singularity-shape">orchestrator</div>
+            <div class="singularity-shape">planner</div>
+            <div class="singularity-shape">researcher</div>
+            <div class="singularity-shape">implementer</div>
+          </div>
+          <div class="singularity-orbit-line" aria-hidden="true"><div class="singularity-orbit-fill"></div></div>
+          <div class="singularity-boundary">4 orbits · 12 nodes · evidence required</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- ===== FOOTER ===== -->
   <div style="padding:44px 0 70px;border-top:1px solid rgba(28,24,21,.12);display:flex;flex-wrap:wrap;gap:24px;align-items:baseline;justify-content:space-between">
     <div style="display:flex;flex-direction:column;gap:6px">
@@ -318,6 +379,9 @@
   </div>
 
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/ScrollTrigger.min.js"></script>
 
 <!-- ===== SCROLL SEAL ===== -->
 <div style="position:fixed;left:0;bottom:0;width:100%;height:46px;pointer-events:none;z-index:60">
@@ -363,6 +427,250 @@
   window.addEventListener('resize', update);
   update();
 })();
+</script>
+<script>
+(function () {
+  var section = document.getElementById('singularity');
+  if (!section) return;
+
+  var canvas = document.getElementById('singularity-canvas');
+  var copy = section.querySelector('.singularity-copy');
+  var shapes = section.querySelectorAll('.singularity-shape');
+  var orbitFill = section.querySelector('.singularity-orbit-fill');
+  var reduceMotion = window.matchMedia('(prefers-reduced-motion:reduce)').matches;
+  var gsapRuntime = window.gsap;
+  var ScrollTriggerRuntime = window.ScrollTrigger;
+
+  function publish(progress) {
+    window.__singularityProgress = progress;
+    window.dispatchEvent(new CustomEvent('singularity-progress', { detail: { progress: progress } }));
+  }
+
+  if (!gsapRuntime || !ScrollTriggerRuntime || reduceMotion) {
+    section.classList.add('is-static');
+    if (orbitFill) orbitFill.style.transform = 'scaleX(1)';
+    publish(1);
+    return;
+  }
+
+  gsapRuntime.registerPlugin(ScrollTriggerRuntime);
+  var context = gsapRuntime.context(function () {
+    var timeline = gsapRuntime.timeline({
+      defaults: { ease: 'none' },
+      scrollTrigger: {
+        id: 'promper-singularity',
+        trigger: section,
+        start: 'top bottom',
+        end: 'bottom bottom',
+        scrub: 0.7,
+        invalidateOnRefresh: true,
+        onUpdate: function (self) { publish(self.progress); }
+      }
+    });
+
+    timeline
+      .fromTo(canvas, { autoAlpha: 0, scale: 0.68, yPercent: 18 }, { autoAlpha: 1, scale: 1.08, yPercent: -7, duration: 1 }, 0)
+      .fromTo(copy, { autoAlpha: 0, y: 96 }, { autoAlpha: 1, y: -24, duration: 0.72 }, 0.08)
+      .fromTo(shapes, { autoAlpha: 0, y: 22 }, { autoAlpha: 1, y: 0, stagger: 0.035, duration: 0.32 }, 0.34)
+      .to(orbitFill, { scaleX: 1, duration: 0.54 }, 0.4);
+  }, section);
+
+  publish(0);
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(function () { ScrollTriggerRuntime.refresh(); });
+  }
+
+  window.addEventListener('pagehide', function () {
+    context.revert();
+    var trigger = ScrollTriggerRuntime.getById('promper-singularity');
+    if (trigger) trigger.kill();
+  }, { once: true });
+})();
+</script>
+<script type="module">
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.181.2/+esm";
+
+const section = document.getElementById("singularity");
+const canvas = document.getElementById("singularity-canvas");
+const stage = section?.querySelector(".singularity-stage");
+
+if (section && canvas) {
+  let renderer;
+  try {
+    renderer = new THREE.WebGLRenderer({
+      canvas,
+      alpha: true,
+      antialias: false,
+      powerPreference: "high-performance",
+    });
+  } catch {
+    section.classList.add("webgl-unavailable");
+  }
+
+  if (renderer) {
+    section.classList.add("has-webgl");
+    renderer.setClearColor(0x000000, 0);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    const uniforms = {
+      uResolution: { value: new THREE.Vector2(1, 1) },
+      uProgress: { value: window.__singularityProgress ?? 0 },
+      uPointer: { value: new THREE.Vector2(0, 0) },
+    };
+    const geometry = new THREE.PlaneGeometry(2, 2);
+    const material = new THREE.ShaderMaterial({
+      uniforms,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+      vertexShader: `
+        varying vec2 vUv;
+
+        void main() {
+          vUv = uv;
+          gl_Position = vec4(position.xy, 0.0, 1.0);
+        }
+      `,
+      fragmentShader: `
+        precision highp float;
+
+        uniform vec2 uResolution;
+        uniform float uProgress;
+        uniform vec2 uPointer;
+        varying vec2 vUv;
+
+        float hash21(vec2 p) {
+          p = fract(p * vec2(123.34, 456.21));
+          p += dot(p, p + 45.32);
+          return fract(p.x * p.y);
+        }
+
+        mat2 rotate2d(float angle) {
+          float s = sin(angle);
+          float c = cos(angle);
+          return mat2(c, -s, s, c);
+        }
+
+        void main() {
+          vec2 uv = vUv - 0.5;
+          uv.x *= uResolution.x / max(uResolution.y, 1.0);
+
+          float reveal = smoothstep(0.0, 0.72, uProgress);
+          uv *= mix(1.62, 0.82, reveal);
+          uv -= uPointer * mix(0.08, 0.035, reveal);
+
+          float radius = length(uv);
+          float angle = atan(uv.y, uv.x);
+          float lens = 0.055 / max(radius, 0.035);
+
+          vec2 starUv = rotate2d(lens * 0.18 + uProgress * 0.04) * uv * (24.0 + lens);
+          vec2 starCell = floor(starUv);
+          float starCore = max(0.0, 1.0 - length(fract(starUv) - 0.5) * 2.0);
+          float stars = step(0.992, hash21(starCell)) * pow(starCore, 12.0);
+
+          vec3 color = vec3(0.005, 0.006, 0.016);
+          color += stars * vec3(0.58, 0.68, 1.0) * (0.25 + reveal * 1.4);
+
+          vec2 disk = rotate2d(-0.18 + uPointer.x * 0.04) * uv;
+          disk.y *= 5.2;
+          float diskRadius = length(disk);
+          float band = exp(-pow((diskRadius - 0.39) / 0.085, 2.0));
+          float grain = 0.58 + 0.42 * sin(angle * 11.0 - lens * 2.4 + uProgress * 5.0 + hash21(floor(disk * 44.0)) * 2.0);
+          float innerCut = smoothstep(0.18, 0.25, diskRadius);
+          float outerCut = 1.0 - smoothstep(0.54, 0.72, diskRadius);
+          float diskMask = band * innerCut * outerCut * (0.62 + grain * 0.58);
+          float doppler = smoothstep(-0.65, 0.72, disk.x / max(diskRadius, 0.001));
+          vec3 diskColor = mix(vec3(0.86, 0.08, 0.025), vec3(1.0, 0.78, 0.38), doppler);
+          color += diskColor * diskMask * reveal * 1.65;
+
+          float photonRing = exp(-pow((radius - 0.187) / 0.012, 2.0));
+          color += vec3(1.0, 0.48, 0.16) * photonRing * reveal * 1.35;
+
+          float halo = exp(-pow((radius - 0.23) / 0.12, 2.0));
+          color += vec3(0.23, 0.035, 0.055) * halo * reveal * 0.72;
+
+          float horizon = 1.0 - smoothstep(0.145, 0.176, radius);
+          color = mix(color, vec3(0.0), horizon);
+
+          float vignette = 1.0 - smoothstep(0.34, 0.78, length(vUv - 0.5));
+          color *= 0.38 + vignette * 0.86;
+          float alpha = smoothstep(0.0, 0.12, uProgress) * (0.38 + vignette * 0.62);
+
+          gl_FragColor = vec4(color, alpha);
+        }
+      `,
+    });
+    const plane = new THREE.Mesh(geometry, material);
+    scene.add(plane);
+
+    const render = () => renderer.render(scene, camera);
+    const resize = () => {
+      renderer.setSize(Math.max(1, canvas.clientWidth), Math.max(1, canvas.clientHeight), false);
+      uniforms.uResolution.value.set(renderer.domElement.width, renderer.domElement.height);
+      render();
+    };
+    const onProgress = (event) => {
+      uniforms.uProgress.value = event.detail.progress;
+      render();
+    };
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion:reduce)").matches;
+    const onPointerMove = (event) => {
+      if (reduceMotion) return;
+      const rect = (stage ?? section).getBoundingClientRect();
+      const x = ((event.clientX - rect.left) / rect.width - 0.5) * 2;
+      const y = -((event.clientY - rect.top) / Math.max(rect.height, 1) - 0.5) * 2;
+      if (window.gsap) {
+        window.gsap.to(uniforms.uPointer.value, {
+          x,
+          y,
+          duration: 0.65,
+          ease: "power3.out",
+          overwrite: "auto",
+          onUpdate: render,
+        });
+      } else {
+        uniforms.uPointer.value.set(x, y);
+        render();
+      }
+    };
+    const onPointerLeave = () => {
+      if (reduceMotion) return;
+      if (window.gsap) {
+        window.gsap.to(uniforms.uPointer.value, {
+          x: 0,
+          y: 0,
+          duration: 0.8,
+          ease: "power3.out",
+          overwrite: "auto",
+          onUpdate: render,
+        });
+      } else {
+        uniforms.uPointer.value.set(0, 0);
+        render();
+      }
+    };
+
+    const observer = new ResizeObserver(resize);
+    observer.observe(stage ?? canvas);
+    window.addEventListener("singularity-progress", onProgress);
+    section.addEventListener("pointermove", onPointerMove, { passive: true });
+    section.addEventListener("pointerleave", onPointerLeave);
+    resize();
+
+    window.addEventListener("pagehide", () => {
+      observer.disconnect();
+      window.removeEventListener("singularity-progress", onProgress);
+      section.removeEventListener("pointermove", onPointerMove);
+      section.removeEventListener("pointerleave", onPointerLeave);
+      if (window.gsap) window.gsap.killTweensOf(uniforms.uPointer.value);
+      geometry.dispose();
+      material.dispose();
+      renderer.dispose();
+    }, { once: true });
+  }
+}
 </script>
 </body>
 </html>

@@ -53,15 +53,23 @@ async function main() {
     return passThrough("parse-error"); // malformed input — never block the real tool call
   }
 
-  if (input.hook_event_name !== "PreToolUse" || !/^(Agent|Task)$/.test(input.tool_name || "")) {
+  if (input.hook_event_name !== "PreToolUse" || !/^(Agent|Task|spawn_agent)$/.test(input.tool_name || "")) {
     return passThrough("not-a-spawn-event");
   }
 
   const toolInput = input.tool_input || {};
-  const subagentType = typeof toolInput.subagent_type === "string" ? toolInput.subagent_type : null;
+  const rawSubagentType =
+    (typeof toolInput.subagent_type === "string" && toolInput.subagent_type) ||
+    (typeof toolInput.agent_type === "string" && toolInput.agent_type) ||
+    null;
+  const subagentType = rawSubagentType === "default" ? null : rawSubagentType;
   if (subagentType && READ_ONLY_SPAWNS.has(subagentType)) return passThrough("read-only-spawn");
 
-  const task = (typeof toolInput.prompt === "string" && toolInput.prompt) || toolInput.description || "";
+  const promptField = typeof toolInput.message === "string" ? "message" : "prompt";
+  const task =
+    (typeof toolInput[promptField] === "string" && toolInput[promptField]) ||
+    toolInput.description ||
+    "";
   if (!task || task.includes(ENGINEERED_MARKER)) return passThrough("already-engineered");
 
   let buildBrief;
@@ -99,7 +107,7 @@ async function main() {
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
       permissionDecision: "allow",
-      updatedInput: { ...toolInput, prompt: result.prompt },
+      updatedInput: { ...toolInput, [promptField]: result.prompt },
     },
   };
   process.stdout.write(JSON.stringify(output));

@@ -20,7 +20,7 @@ record the decision at ~/.invoker/state/promper-decision.json:
 already substituted with this session's concrete promper-decision-<session_id>.json path —
 write exactly the path shown. Editors of this file: keep the literal above intact; it is the
 substitution anchor, and also the fallback path when no session_id exists, e.g. on Codex.)
-The contract gate (PreToolUse on Edit|Write|MultiEdit|NotebookEdit) enforces it: edits to files
+The contract gate (PreToolUse on Edit|Write in Codex, plus Claude edit tools) enforces it: edits to files
 inside the repo are denied until a fresh decision (any verdict, 60-min TTL, same repo root,
 this session's file or the global fallback) exists. Writes outside the repo — including the
 state file itself — are never gated. Each session's decision is cleared when that session

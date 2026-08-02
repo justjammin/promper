@@ -43,6 +43,7 @@ function buildClaudeManifest(source, version) {
     description: source.description,
   };
   if (source.skills) manifest.skills = source.skills;
+  if (source.hooks) manifest.hooks = source.hooks;
   manifest.author = source.author;
   if (source.homepage) manifest.homepage = source.homepage;
   if (source.repository) manifest.repository = source.repository;
@@ -60,6 +61,7 @@ function buildCodexManifest(source, version) {
     description: source.description,
   };
   if (source.skills) manifest.skills = source.skills;
+  if (source.hooks) manifest.hooks = source.hooks;
   manifest.author = source.author;
   manifest.license = source.license;
   manifest.interface = {

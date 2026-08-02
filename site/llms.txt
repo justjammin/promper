@@ -1,4 +1,4 @@
-# promper breakdown
+# promper
 
 > breakdown is the one-shot prompt expander in the promper toolkit for AI coding agents.
 > One rough sentence in, a fully engineered, ready-to-run plan out. It runs on Claude Code
@@ -36,6 +36,17 @@ Every run lands on disk in `.promper/<slug>/`:
   what it sends.
 
 Both are independent open-source projects; breakdown integrates with them but ships without either.
+
+## Singularity
+
+`/promper:singularity <goal>` wraps the same goal contract and graph in a bounded runtime.
+It executes ready nodes, collapses their results into compact evidence, evaluates every
+acceptance criterion, and adds one focused remediation node when a concrete gap remains.
+
+The first invocation is plan-only unless `--run` is present. Defaults cap a run at four orbits
+and twelve total nodes. A run succeeds only when its weighted score reaches the threshold,
+every blocking criterion passes, and each pass has a concrete evidence reference. Otherwise
+it stops at an event horizon and writes an honest partial result that can be resumed.
 
 ## Links
 

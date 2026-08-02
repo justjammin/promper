@@ -33,7 +33,14 @@ import { isAbsolute, join, relative, resolve } from "node:path";
 const STATE_DIR = join(homedir(), ".invoker", "state");
 const LEGACY_STATE_PATH = join(STATE_DIR, "promper-decision.json");
 const STATE_TTL_MS = 60 * 60 * 1000; // matches STATE_TTL_MS in src/brief.ts
-const GATED_TOOLS = /^(Edit|Write|MultiEdit|NotebookEdit)$/;
+const GATED_TOOLS = /^(Edit|Write|MultiEdit|NotebookEdit|apply_patch)$/;
+
+function patchTargets(command) {
+  if (typeof command !== "string") return [];
+  return [...command.matchAll(/^\*\*\* (?:Add|Update|Delete) File: (.+)$/gm), ...command.matchAll(/^\*\*\* Move to: (.+)$/gm)]
+    .map((match) => match[1].trim())
+    .filter(Boolean);
+}
 const VERDICTS = new Set(["inline", "agent", "mixed"]);
 
 function passThrough() {
@@ -107,16 +114,20 @@ async function main() {
   }
 
   const toolInput = input.tool_input || {};
-  const target =
-    (typeof toolInput.file_path === "string" && toolInput.file_path) ||
-    (typeof toolInput.notebook_path === "string" && toolInput.notebook_path) ||
-    "";
-  if (!target) return passThrough(); // can't tell what's being written — fail open
-
   const repoRoot = gitRoot();
-  const rel = relative(repoRoot, resolve(process.cwd(), target));
-  const insideRepo = rel !== "" && !rel.startsWith("..") && !isAbsolute(rel);
-  if (!insideRepo) return passThrough(); // out-of-repo writes (incl. the state file) are never gated
+  const targets = [
+    (typeof toolInput.file_path === "string" && toolInput.file_path) ||
+      (typeof toolInput.notebook_path === "string" && toolInput.notebook_path) ||
+      "",
+    ...patchTargets(toolInput.command),
+  ].filter(Boolean);
+  if (targets.length === 0) return passThrough(); // can't tell what's being written — fail open
+
+  const touchesRepo = targets.some((target) => {
+    const rel = relative(repoRoot, resolve(process.cwd(), target));
+    return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel);
+  });
+  if (!touchesRepo) return passThrough(); // out-of-repo writes (incl. the state file) are never gated
 
   const sessionPath = decisionPath(input.session_id);
   const candidates = sessionPath === LEGACY_STATE_PATH ? [sessionPath] : [sessionPath, LEGACY_STATE_PATH];

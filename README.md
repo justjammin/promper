@@ -7,9 +7,12 @@
 
 # promper
 
-Promper is a prompt-engineering toolkit for Claude Code. It ships two commands:
+Promper is a prompt-engineering toolkit for Claude Code and Codex. It ships five skills:
 
 - **`/promper <intent>`**: turns a rough request into a clean, **role-grounded** prompt.
+- **`/promper:breakdown <goal>`**: compiles a finite PRD, dependency graph, and prompt package.
+- **`/promper:singularity <goal>`**: runs a bounded graph until its acceptance criteria pass or a hard limit stops it.
+- **`/promper:setup`**: rebuilds the lean routing map from installed agents.
 - **`/prim`**: grades your agents against the prompt-engineering standard and hands out the "seal of approval".
 
 ## The idea
@@ -27,6 +30,12 @@ raw intent
 ```
 
 **Who does what:** promper *makes* the prompt, *routes* to the agent, and *decides execution* · the agents *are* the roles · prim *guards* them.
+
+| Command | Job | Stop point |
+|---|---|---|
+| `/promper` | Engineer one routed prompt. | The prompt and its execution placement are ready. |
+| `/promper:breakdown` | Compile one finite project graph. | The PRD, graph, prompts, and lane plan are ready. |
+| `/promper:singularity` | Execute and adapt a bounded graph. | Every required criterion has evidence and the score passes, or a safety limit stops the run. |
 
 ## /promper
 
@@ -62,6 +71,43 @@ plan with the same per-node inline-vs-subagent decision `/promper` uses.
 Flags: `--no-beads` · `--prd <path>` (ingest an existing spec) · `--target=portable|costar` ·
 `--out <dir>`. It runs on Claude Code and Codex alike; nothing depends on hooks, and every
 phase states how it degrades when something is missing.
+
+## /promper:singularity
+
+```text
+/promper:singularity migrate the billing service to event sourcing
+/promper:singularity migrate the billing service to event sourcing --run
+```
+
+Singularity starts with the same goal contract and finite graph that breakdown uses. The first
+command is a planning pass. It writes the orchestration package, shows the acceptance criteria
+and safety limits, and stops before it touches project files or starts an agent. Add `--run`,
+or approve the plan afterward, to begin execution.
+
+One orbit executes the ready nodes, stores a compact collapse for each result, and checks the
+evidence against every criterion. If a concrete gap remains, singularity can add one focused
+remediation node for that gap. Equivalent work is rejected by a stable fingerprint. The loop
+ends when the weighted score reaches the configured threshold and every blocking criterion has
+evidence, or when an event-horizon condition such as `max_orbits`, `max_nodes`, missing access,
+or repeated lack of progress stops it.
+
+The runtime has four built-in agent shapes: `orchestrator` owns state and boundaries,
+`planner` compiles and evaluates, `researcher` gathers evidence, and `implementer` changes the
+project. These are fallback work shapes, not replacement personas. A routed specialist from
+the Promper map still supplies the role whenever one is available.
+
+Runs are resumable. State, orbit notes, collapse artifacts, and the partial or final result
+live beside the breakdown files in `.promper/<slug>/`. A stopped run can continue without
+discarding completed evidence:
+
+```text
+/promper:singularity --resume billing-event-sourcing --max-orbits 2 --run
+```
+
+Limits always stay finite. Defaults are `--max-orbits 4`, `--max-nodes 12`, `--threshold 90`,
+and `--stall-limit 2`. Other flags are `--prd <path>`, `--no-beads`, and `--out <dir>`.
+Without a subagent tool, Codex runs the same ready nodes sequentially and reports that choice;
+the artifacts, scoring, accretion, collapse, and stop rules do not change.
 
 ## /prim
 
@@ -102,6 +148,7 @@ promper/
     promper-setup/SKILL.md   builds the lean routing map (wraps `promper scan`)
     prim/SKILL.md      the "evaluate / certify" skill
     breakdown/SKILL.md the one-shot prompt expander (PRD → domains → beads → prompts)
+    singularity/SKILL.md the bounded accretion-collapse runtime
   src/                 the TypeScript engine (`scan`/`hydrate`/`brief`/`gate`/`classify`) — deterministic, zero LLM
   reference/
     pe-principles.md   shared source of truth (11 principles, XML skeleton, rubric)
@@ -130,8 +177,9 @@ keyed to the git repo root); `enrich-spawn.mjs` reads it back and inherits that 
 the next general-purpose spawn in the same repo — routing happens once, in the model, and the
 hooks stay deterministic.
 
-**Off switch:** `PROMPER_ACTIVE=0` disables all five hooks. `/promper`, `/prim`, and
-`/promper:setup` are unaffected either way — they stay available as the manual override.
+**Off switch:** `PROMPER_ACTIVE=0` disables all five hooks. `/promper`, `/prim`,
+`/promper:setup`, `/promper:breakdown`, and `/promper:singularity` are unaffected either way.
+They stay available as the manual override.
 
 **Caveats:**
 - Verified on Claude Code CLI. Codex support (`.codex-plugin/plugin.json` + the same hooks) is
@@ -156,11 +204,11 @@ Quickest path, one command:
 npx @ninjamin/promper
 ```
 
-That copies the `promper`, `promper-setup`, and `prim` skills into `~/.claude/skills/` **and
+That copies the `promper`, `promper-setup`, `prim`, `breakdown`, and `singularity` skills into `~/.claude/skills/` **and
 bootstraps the role source** — promper has a hard dependency on the
 [wshobson/agents](https://github.com/wshobson/agents) plugin marketplace (88 plugins,
 ~194 agents). The installer adds it via `claude plugin marketplace add wshobson/agents` when
-missing, then scans it into the map. Restart Claude Code and `/promper` and `/prim` resolve.
+missing, then scans it into the map. Restart Claude Code and the five skills resolve.
 
 Re-run the bootstrap any time (idempotent; also what `/promper:setup` runs):
 
@@ -240,7 +288,7 @@ descriptions), groups the hits by domain, and flags which suggested agents exist
 map. Deterministic: same text + same map → same output; no match exits 0 with
 `"unmapped": true`.
 
-**Local dev:** the two skills are symlinked into `~/.claude/skills/`, so the commands resolve directly while you hack on them (restart Claude Code to pick up new commands). The repo stays the single source of truth: the symlinks point back at `skills/promper` and `skills/prim`, so there's no second copy to drift.
+**Local dev:** the five skill directories can be symlinked into `~/.claude/skills/`, so the commands resolve directly while you work on them (restart Claude Code to pick up new commands). The repo stays the single source of truth, so there is no second copy to drift.
 
 > promper routes itself: it picks the role-source agent from the in-session agent list when
 > visible, else from the lean map pieces at `~/.invoker/map/` (built by `/promper:setup`). No
