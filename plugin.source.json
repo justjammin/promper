@@ -10,6 +10,7 @@
   "license": "Apache-2.0",
   "keywords": ["prompt-engineering", "agents", "prompt", "orchestration", "claude-code"],
   "skills": "./skills/",
+  "hooks": "./hooks/hooks.json",
   "codex": {
     "displayName": "Promper",
     "shortDescription": "Engineer prompts, compile project graphs, and run bounded evidence-backed graph loops with routed specialist roles.",

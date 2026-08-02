@@ -3,6 +3,7 @@
   "version": "0.3.0",
   "description": "Prompt-engineering toolkit. Engineer role-grounded prompts, compile finite project graphs, run bounded goal-directed graph execution to evidence-backed convergence, and certify agent prompts.",
   "skills": "./skills/",
+  "hooks": "./hooks/hooks.json",
   "author": {
     "name": "Jamin Echols",
     "url": "https://github.com/justjammin"

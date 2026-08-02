@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p assets)",
+      "Bash(cp /Users/jammin/Downloads/promper-stacked.svg assets/promper-stacked.svg)",
+      "Bash(cp /Users/jammin/Downloads/promper-seal-icon-bowtie.svg assets/promper-seal-icon-bowtie.svg)",
+      "Bash(bd ready *)",
+      "Bash(bd init *)",
+      "Bash(bd create *)",
+      "Bash(bd update *)",
+      "Bash(bd list *)",
+      "Bash(bd show *)",
+      "Bash(node bin/promper.mjs brief \"summarize this changelog\" --json)",
+      "Bash(node bin/promper.mjs brief \"design a rate limiter API\" --agent backend-development-backend-architect --json)",
+      "Bash(node bin/promper.mjs brief \"design a rate limiter API\" --subagent-type backend-development-backend-architect --json)"
+    ]
+  }
+}
