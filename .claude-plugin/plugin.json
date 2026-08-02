@@ -1,7 +1,7 @@
 {
   "name": "promper",
   "version": "0.3.0",
-  "description": "Prompt-engineering toolkit. /promper engineers role-grounded prompts (role inherited from the routed specialist agent); /prim certifies your agents against the prompt-engineering standard.",
+  "description": "Prompt-engineering toolkit. Engineer role-grounded prompts, compile finite project graphs, run bounded goal-directed graph execution to evidence-backed convergence, and certify agent prompts.",
   "skills": "./skills/",
   "author": {
     "name": "Jamin Echols",
