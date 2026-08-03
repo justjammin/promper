@@ -43,7 +43,9 @@ function buildClaudeManifest(source, version) {
     description: source.description,
   };
   if (source.skills) manifest.skills = source.skills;
-  if (source.hooks) manifest.hooks = source.hooks;
+  // No `hooks` key: Claude Code loads the standard hooks/hooks.json automatically, and naming it
+  // again in the manifest is a duplicate registration ("Duplicate hooks file detected"). The key
+  // is reserved there for *additional* hook files. Codex keeps it — see buildCodexManifest.
   manifest.author = source.author;
   if (source.homepage) manifest.homepage = source.homepage;
   if (source.repository) manifest.repository = source.repository;
