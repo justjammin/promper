@@ -1,0 +1,9 @@
+{
+  "meta": { "slug": "bad", "intent": "missing required positioning block" },
+  "evidence": [],
+  "domainModel": { "glossary": [], "entities": [] },
+  "patterns": { "selected": [], "rejected": [] },
+  "risks": [],
+  "openQuestions": [],
+  "scope": { "nodesPreview": [] }
+}

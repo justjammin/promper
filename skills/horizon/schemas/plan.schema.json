@@ -1,0 +1,158 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "promper-orbit/horizon/plan.schema.json",
+  "title": "Orbit Plan Shape",
+  "description": "The spine artifact of a promper:orbit run. Created by genesis, enriched by sideeye (patterns) and horizon (edits), consumed by breakdown/singularity. The Horizon template renders one section per top-level key.",
+  "type": "object",
+  "required": ["meta", "positioning", "evidence", "domainModel", "patterns", "risks", "openQuestions", "scope"],
+  "additionalProperties": false,
+  "properties": {
+    "meta": {
+      "type": "object",
+      "required": ["slug", "intent"],
+      "additionalProperties": false,
+      "properties": {
+        "slug": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "intent": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "schemaVersion": { "type": "string", "default": "1.0" }
+      }
+    },
+    "positioning": {
+      "type": "object",
+      "required": ["problem", "audience", "successCriteria", "nonGoals"],
+      "additionalProperties": false,
+      "properties": {
+        "problem": { "type": "string" },
+        "audience": { "type": "string" },
+        "successCriteria": { "type": "array", "items": { "type": "string" } },
+        "nonGoals": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "claim", "source", "confidence"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "pattern": "^e[0-9]+$" },
+          "claim": { "type": "string" },
+          "source": { "type": "string", "description": "repo path or primary-source URL" },
+          "confidence": { "enum": ["high", "med", "low"] }
+        }
+      }
+    },
+    "domainModel": {
+      "type": "object",
+      "required": ["glossary", "entities"],
+      "additionalProperties": false,
+      "properties": {
+        "glossary": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["term", "definition"],
+            "additionalProperties": false,
+            "properties": {
+              "term": { "type": "string" },
+              "definition": { "type": "string" }
+            }
+          }
+        },
+        "entities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "responsibilities"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string" },
+              "responsibilities": { "type": "array", "items": { "type": "string" } },
+              "relations": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        }
+      }
+    },
+    "patterns": {
+      "type": "object",
+      "description": "Left empty by genesis; filled by sideeye SELECT in Phase 1.",
+      "required": ["selected", "rejected"],
+      "additionalProperties": false,
+      "properties": {
+        "selected": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "reason"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string" },
+              "reason": { "type": "string" },
+              "evidenceIds": { "type": "array", "items": { "type": "string", "pattern": "^e[0-9]+$" } }
+            }
+          }
+        },
+        "rejected": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "missingEvidence"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string" },
+              "missingEvidence": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "risks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["risk", "severity"],
+        "additionalProperties": false,
+        "properties": {
+          "risk": { "type": "string" },
+          "mitigation": { "type": "string" },
+          "severity": { "enum": ["P0", "P1", "P2"] }
+        }
+      }
+    },
+    "openQuestions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "q", "blocking"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "pattern": "^q[0-9]+$" },
+          "q": { "type": "string" },
+          "blocking": { "type": "boolean" }
+        }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "required": ["nodesPreview"],
+      "additionalProperties": false,
+      "properties": {
+        "nodesPreview": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "title", "domain"],
+            "additionalProperties": false,
+            "properties": {
+              "id": { "type": "string", "pattern": "^n[0-9]+$" },
+              "title": { "type": "string" },
+              "domain": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

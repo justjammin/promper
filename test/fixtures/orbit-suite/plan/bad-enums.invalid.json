@@ -1,0 +1,13 @@
+{
+  "meta": { "slug": "bad-enums", "intent": "bad enum + bad id pattern + extra key" },
+  "positioning": { "problem": "p", "audience": "a", "successCriteria": [], "nonGoals": [] },
+  "evidence": [
+    { "id": "X9", "claim": "wrong id pattern (must be e<n>)", "source": "src/x.ts", "confidence": "maybe" }
+  ],
+  "domainModel": { "glossary": [], "entities": [] },
+  "patterns": { "selected": [], "rejected": [] },
+  "risks": [{ "risk": "boom", "severity": "P5" }],
+  "openQuestions": [],
+  "scope": { "nodesPreview": [] },
+  "surpriseExtraKey": true
+}

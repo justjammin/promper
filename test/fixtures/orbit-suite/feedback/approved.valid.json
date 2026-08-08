@@ -1,0 +1,7 @@
+{
+  "slug": "rate-limit",
+  "verdict": "approved",
+  "decisions": [{ "ref": "q1", "answer": "100 req/min" }, { "ref": "positioning.problem", "edit": "tightened wording" }],
+  "approvals": { "positioning": "approve", "evidence": "approve", "patterns": "approve" },
+  "notes": "lgtm"
+}

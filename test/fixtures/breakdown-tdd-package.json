@@ -1,0 +1,67 @@
+{
+  "title": "Payment ledger reporting",
+  "nodes": [
+    {
+      "id": "n1",
+      "domain": "backend",
+      "action": "design payment ledger API",
+      "test_tier": {
+        "write_first": ["integration", "system", "e2e", "security"],
+        "gated_followup": [],
+        "post_ship": ["smoke", "regression"]
+      }
+    },
+    {
+      "id": "n2",
+      "domain": "database",
+      "action": "add postgres migration",
+      "test_tier": {
+        "write_first": ["integration", "security"],
+        "gated_followup": ["perf", "load", "stress"],
+        "post_ship": ["smoke", "regression"]
+      }
+    },
+    {
+      "id": "n3",
+      "domain": "documentation",
+      "action": "write migration guide",
+      "test_tier": null
+    }
+  ],
+  "beads": {
+    "epic": "ja-fixture",
+    "nodes": {
+      "n1": "ja-fixture.1",
+      "n2": "ja-fixture.2",
+      "n3": "ja-fixture.3"
+    },
+    "followup_tests": "ja-fixture.4"
+  },
+  "bead_commands": [
+    {
+      "kind": "epic",
+      "argv": ["bd", "create", "Task: Payment ledger reporting", "--type", "epic", "--json"]
+    },
+    {
+      "kind": "node",
+      "node": "n1",
+      "argv": ["bd", "create", "Step n1: design payment ledger API", "--parent", "ja-fixture", "--json"]
+    },
+    {
+      "kind": "node",
+      "node": "n2",
+      "argv": ["bd", "create", "Step n2: add postgres migration", "--parent", "ja-fixture", "--deps", "ja-fixture.1", "--json"]
+    },
+    {
+      "kind": "node",
+      "node": "n3",
+      "argv": ["bd", "create", "Step n3: write migration guide", "--parent", "ja-fixture", "--deps", "ja-fixture.2", "--json"]
+    },
+    {
+      "kind": "followup_tests",
+      "id": "ja-fixture.4",
+      "deps": ["ja-fixture.1", "ja-fixture.2"],
+      "argv": ["bd", "create", "Follow-up: smoke + regression for Payment ledger reporting", "--parent", "ja-fixture", "--deps", "ja-fixture.1,ja-fixture.2", "--json"]
+    }
+  ]
+}

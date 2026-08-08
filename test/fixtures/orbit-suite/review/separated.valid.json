@@ -1,0 +1,14 @@
+{
+  "fixedPoint": "abc123",
+  "diff": "src/service.ts",
+  "standardsSources": ["AGENTS.md"],
+  "prd": ".promper/example/PRD.md",
+  "defects": [
+    {"id": "d1", "kind": "documented-standard", "description": "Public function lacks required test."},
+    {"id": "d2", "kind": "missing-requirement", "description": "AC-2 retry behavior is absent."}
+  ],
+  "expected": {
+    "standards": ["d1"],
+    "spec": ["d2"]
+  }
+}

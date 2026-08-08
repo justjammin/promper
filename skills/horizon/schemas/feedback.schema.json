@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "promper-orbit/horizon/feedback.schema.json",
+  "title": "Horizon Feedback Shape",
+  "description": "Emitted by the Horizon HTML surface when the user validates the plan. The agent reads this to decide whether to proceed to execution or loop back.",
+  "type": "object",
+  "required": ["slug", "verdict", "decisions", "approvals", "notes"],
+  "additionalProperties": false,
+  "properties": {
+    "slug": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+    "verdict": {
+      "enum": ["approved", "changes-requested"],
+      "description": "approved → proceed to Phase 3. changes-requested → loop back to the flagged section."
+    },
+    "decisions": {
+      "type": "array",
+      "description": "Answers to openQuestions and edits to evidence/positioning fields, keyed by the referenced id.",
+      "items": {
+        "type": "object",
+        "required": ["ref"],
+        "additionalProperties": false,
+        "anyOf": [
+          { "required": ["answer"] },
+          { "required": ["edit"] }
+        ],
+        "properties": {
+          "ref": { "type": "string", "description": "id of an openQuestion (q*), evidence (e*), node (n*), or a dotted path like positioning.problem" },
+          "answer": { "type": "string", "minLength": 1, "description": "answer to an open question" },
+          "edit": { "type": "string", "minLength": 1, "description": "replacement/edited value for the referenced field" }
+        }
+      }
+    },
+    "approvals": {
+      "type": "object",
+      "description": "Per-section sign-off. Any 'change' with verdict 'approved' is a contradiction the agent must resolve before proceeding.",
+      "additionalProperties": false,
+      "required": ["positioning", "evidence", "domainModel", "patterns", "risks", "openQuestions", "scope"],
+      "properties": {
+        "positioning": { "enum": ["approve", "change"] },
+        "evidence": { "enum": ["approve", "change"] },
+        "domainModel": { "enum": ["approve", "change"] },
+        "patterns": { "enum": ["approve", "change"] },
+        "risks": { "enum": ["approve", "change"] },
+        "openQuestions": { "enum": ["approve", "change"] },
+        "scope": { "enum": ["approve", "change"] }
+      }
+    },
+    "notes": { "type": "string" }
+  }
+}

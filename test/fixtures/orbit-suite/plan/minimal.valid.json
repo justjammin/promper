@@ -1,0 +1,10 @@
+{
+  "meta": { "slug": "minimal", "intent": "smallest valid plan" },
+  "positioning": { "problem": "p", "audience": "a", "successCriteria": [], "nonGoals": [] },
+  "evidence": [],
+  "domainModel": { "glossary": [], "entities": [] },
+  "patterns": { "selected": [], "rejected": [] },
+  "risks": [],
+  "openQuestions": [],
+  "scope": { "nodesPreview": [] }
+}

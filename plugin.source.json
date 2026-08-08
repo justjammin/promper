@@ -1,6 +1,6 @@
 {
   "name": "promper",
-  "description": "Prompt-engineering toolkit. Engineer role-grounded prompts, compile finite project graphs, run bounded goal-directed graph execution to evidence-backed convergence, and certify agent prompts.",
+  "description": "Prompt-engineering toolkit. Discover evidence, critique and visually validate plans, compile finite project graphs, run bounded goal-directed graph execution to evidence-backed convergence, and review results.",
   "author": {
     "name": "Jamin Echols",
     "url": "https://github.com/justjammin"
@@ -13,7 +13,7 @@
   "hooks": "./hooks/hooks.json",
   "codex": {
     "displayName": "Promper",
-    "shortDescription": "Engineer prompts, compile project graphs, and run bounded evidence-backed graph loops with routed specialist roles.",
+    "shortDescription": "Build and validate plans, run evidence-backed graph loops, and review results with routed specialist roles.",
     "category": "Coding"
   }
 }

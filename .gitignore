@@ -1,6 +1,7 @@
 .prim-seal.json
 node_modules/
 .DS_Store
+.promper/
 
 # Beads / Dolt files (added by bd init)
 .dolt/

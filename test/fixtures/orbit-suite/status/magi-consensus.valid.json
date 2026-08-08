@@ -1,0 +1,20 @@
+{
+  "run": { "slug": "billing-migration", "intent": "migrate billing to event sourcing", "engine": "singularity", "tribunal": "magi", "startedAt": "2026-08-07T10:05:00Z" },
+  "phases": [
+    { "id": "genesis", "label": "GENESIS", "status": "done" },
+    { "id": "sideeye", "label": "SIDEEYE", "status": "done" },
+    { "id": "horizon", "label": "HORIZON", "status": "active" },
+    { "id": "execute", "label": "EXECUTE", "status": "pending" },
+    { "id": "review", "label": "REVIEW", "status": "pending" }
+  ],
+  "magi": {
+    "active": true,
+    "state": "decided",
+    "consensusReached": true,
+    "cores": [
+      { "name": "MELCHIOR-1", "state": "decided" },
+      { "name": "BALTHASAR-2", "state": "decided" },
+      { "name": "CASPER-3", "state": "decided" }
+    ]
+  }
+}

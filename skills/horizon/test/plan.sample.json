@@ -1,0 +1,32 @@
+{
+  "meta": { "slug": "rate-limit", "intent": "add rate limiting to the public API", "schemaVersion": "1.0" },
+  "positioning": {
+    "problem": "Public API has no per-client throttling; a single caller can exhaust capacity.",
+    "audience": "Backend platform team + external API consumers.",
+    "successCriteria": ["p95 latency unchanged under limit", "429 returned past quota", "limits configurable per key"],
+    "nonGoals": ["global CDN edge limiting", "billing/metering integration"]
+  },
+  "evidence": [
+    { "id": "e1", "claim": "API gateway is Fastify with no rate plugin", "source": "src/gateway/server.ts", "confidence": "high" },
+    { "id": "e2", "claim": "Redis already available for sessions", "source": "src/lib/redis.ts", "confidence": "high" }
+  ],
+  "domainModel": {
+    "glossary": [
+      { "term": "quota", "definition": "requests allowed per key per window" },
+      { "term": "window", "definition": "rolling time span the quota resets over" }
+    ],
+    "entities": [
+      { "name": "RateLimiter", "responsibilities": ["track usage", "decide allow/deny"], "relations": ["uses Redis", "reads ApiKey"] }
+    ]
+  },
+  "patterns": {
+    "selected": [{ "name": "token-bucket in Redis", "reason": "shared state across instances", "evidenceIds": ["e2"] }],
+    "rejected": [{ "name": "in-memory counter", "missingEvidence": "no single-instance guarantee" }]
+  },
+  "risks": [{ "risk": "Redis outage disables limiting", "mitigation": "fail-open with alert", "severity": "P1" }],
+  "openQuestions": [{ "id": "q1", "q": "Per-key default quota value?", "blocking": true }],
+  "scope": { "nodesPreview": [
+    { "id": "n1", "title": "RateLimiter service", "domain": "gateway" },
+    { "id": "n2", "title": "429 middleware", "domain": "gateway" }
+  ] }
+}

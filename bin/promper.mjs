@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// `npx promper` — copies the promper, setup, prim, breakdown, and singularity skills into ~/.claude/skills/ and
+// `npx promper` — copies all Promper skills into ~/.claude/skills/ and
 // bootstraps the role source (the wshobson/agents marketplace — a HARD dependency).
 // npx runs from a throwaway cache, so we COPY (not symlink, which the repo uses for local dev).
 // `promper bootstrap` — ensure the wshobson/agents marketplace is added and scan it.
@@ -15,7 +15,17 @@ import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
-const SKILLS = ["promper", "promper-setup", "prim", "breakdown", "singularity"];
+const SKILLS = [
+  "promper",
+  "promper-setup",
+  "prim",
+  "breakdown",
+  "singularity",
+  "orbit",
+  "genesis",
+  "horizon",
+  "sideeye",
+];
 const MARKETPLACE_REPO = "wshobson/agents";
 const MARKETPLACE_NAME = "claude-code-workflows"; // its declared marketplace name
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -68,7 +78,7 @@ async function main() {
 
   await bootstrap();
 
-  console.log("\n  Done. Restart Claude Code, then run /promper, /promper:breakdown, /promper:singularity, or /prim.\n");
+  console.log("\n  Done. Restart Claude Code, then run /promper, /promper:orbit, /promper:breakdown, /promper:singularity, or /prim.\n");
 }
 
 async function run() {

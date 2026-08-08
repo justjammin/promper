@@ -79,9 +79,9 @@ DAG. No tickets, no epic, no `pattern` label by default.
 
 **Bead lifecycle (opt-in):** when the user tracks work in beads (`bd` on PATH and they ask, or
 the session already uses beads), run the full lifecycle: optional epic for multi-node graphs
-(`bd create "Task: <task>" --epic --json`), one child ticket per node
-(`bd create "Step <id>: <action>" --parent <epic> --depends <deps> --json`), mark running at
-execution start (`bd update <id> --status running`), close on completion
+(`bd create "Task: <task>" --type epic --json`), one child ticket per node
+(`bd create "Step <id>: <action>" --parent <epic> --deps <deps> --json`, omitting `--deps`
+when the node has none), claim at execution start (`bd update <id> --claim`), close on completion
 (`bd close <id> --reason "Completed by <agent>"`), note on failure, and prune the whole batch
 at run end (`bd delete <id>`) so the store stays bounded. Every bd failure is non-blocking.
 

@@ -7,11 +7,15 @@
 
 # promper
 
-Promper is a prompt-engineering toolkit for Claude Code and Codex. It ships five skills:
+Promper is a prompt-engineering toolkit for Claude Code and Codex. It ships nine skills:
 
 - **`/promper <intent>`**: turns a rough request into a clean, **role-grounded** prompt.
 - **`/promper:breakdown <goal>`**: compiles a finite PRD, dependency graph, and prompt package.
 - **`/promper:singularity <goal>`**: runs a bounded graph until its acceptance criteria pass or a hard limit stops it.
+- **`/promper:orbit <intent>`**: drives the full Genesis → Sideeye → Horizon → Execute → Review pipeline.
+- **`/promper:genesis <intent>`**: grounds a plan in repo evidence, positioning, and domain language.
+- **`/promper:sideeye <plan-or-diff>`**: critiques pattern choices or reviews Standards and Spec independently.
+- **`/promper:horizon <plan.json>`**: validates a plan through a schema-backed visual review gate.
 - **`/promper:setup`**: rebuilds the lean routing map from installed agents.
 - **`/prim`**: grades your agents against the prompt-engineering standard and hands out the "seal of approval".
 
@@ -36,6 +40,10 @@ raw intent
 | `/promper` | Engineer one routed prompt. | The prompt and its execution placement are ready. |
 | `/promper:breakdown` | Compile one finite project graph. | The PRD, graph, prompts, and lane plan are ready. |
 | `/promper:singularity` | Execute and adapt a bounded graph. | Every required criterion has evidence and the score passes, or a safety limit stops the run. |
+| `/promper:orbit` | Run the evidence → critique → visual gate → execution → review arc. | Reviewed output is complete, or a correctness gate blocks. |
+| `/promper:genesis` | Create the evidence-backed plan spine. | `genesis.md` and `plan.json` are ready for critique. |
+| `/promper:sideeye` | Select patterns or review a produced diff. | A verdict with separate Standards and Spec axes is ready. |
+| `/promper:horizon` | Visually validate `plan.json`. | Approved feedback is captured, or requested changes loop upstream. |
 
 ## /promper
 
@@ -109,6 +117,18 @@ and `--stall-limit 2`. Other flags are `--prd <path>`, `--no-beads`, and `--out 
 Without a subagent tool, Codex runs the same ready nodes sequentially and reports that choice;
 the artifacts, scoring, accretion, collapse, and stop rules do not change.
 
+## /promper:orbit
+
+Orbit is the end-to-end path for work that needs disciplined discovery before execution. Genesis
+builds the evidence-backed `plan.json`; Sideeye selects only supported patterns; Horizon captures
+human edits and approval; Breakdown or Singularity executes; Sideeye then reviews the resulting
+diff against independent Standards and Spec axes. Human gates remain unless `--run` is present,
+and correctness failures always block.
+
+Use the phase skills directly when the whole arc is unnecessary. Horizon can also export a
+validated, self-contained offline review file, and MAGI can replace Sideeye's solo tribunal for
+contested or high-blast-radius decisions.
+
 ## /prim
 
 <p align="center">
@@ -149,6 +169,10 @@ promper/
     prim/SKILL.md      the "evaluate / certify" skill
     breakdown/SKILL.md the one-shot prompt expander (PRD → domains → beads → prompts)
     singularity/SKILL.md the bounded accretion-collapse runtime
+    orbit/             full pipeline orchestrator, design, handoff, and tracker
+    genesis/SKILL.md   evidence, positioning, and domain-model phase
+    horizon/           schema-backed visual gate, server, and portable template
+    sideeye/           SELECT/REVIEW critic plus MAGI tribunal
   src/                 the TypeScript engine (`scan`/`hydrate`/`brief`/`gate`/`classify`) — deterministic, zero LLM
   reference/
     pe-principles.md   shared source of truth (11 principles, XML skeleton, rubric)
@@ -288,7 +312,7 @@ descriptions), groups the hits by domain, and flags which suggested agents exist
 map. Deterministic: same text + same map → same output; no match exits 0 with
 `"unmapped": true`.
 
-**Local dev:** the five skill directories can be symlinked into `~/.claude/skills/`, so the commands resolve directly while you work on them (restart Claude Code to pick up new commands). The repo stays the single source of truth, so there is no second copy to drift.
+**Local dev:** the nine skill directories can be symlinked into `~/.claude/skills/`, so the commands resolve directly while you work on them (restart Claude Code to pick up new commands). The repo stays the single source of truth, so there is no second copy to drift.
 
 > promper routes itself: it picks the role-source agent from the in-session agent list when
 > visible, else from the lean map pieces at `~/.invoker/map/` (built by `/promper:setup`). No

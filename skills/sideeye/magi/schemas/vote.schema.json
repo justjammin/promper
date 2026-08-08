@@ -1,0 +1,18 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "promper-orbit/sideeye/magi/vote.schema.json",
+  "title": "MAGI Core Vote",
+  "description": "Strict binary vote a MAGI core emits at the end of its deliberation. No abstain value exists, which is what guarantees a deadlock-free tally.",
+  "type": "object",
+  "required": ["core_name", "short_rationale_paragraph", "vote"],
+  "additionalProperties": false,
+  "properties": {
+    "core_name": { "enum": ["Melchior-1", "Balthasar-2", "Casper-3"] },
+    "short_rationale_paragraph": {
+      "type": "string",
+      "minLength": 1,
+      "description": "A single concise paragraph explaining the core's ultimate motivation and choice."
+    },
+    "vote": { "enum": ["APPROVE", "DENY"] }
+  }
+}

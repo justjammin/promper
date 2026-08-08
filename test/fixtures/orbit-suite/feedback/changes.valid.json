@@ -1,0 +1,7 @@
+{
+  "slug": "rate-limit",
+  "verdict": "changes-requested",
+  "decisions": [{ "ref": "e2", "edit": "Redis is shared with the cache, confirm isolation" }],
+  "approvals": { "positioning": "approve", "patterns": "change" },
+  "notes": "revisit the pattern choice"
+}

@@ -1,0 +1,5 @@
+[
+  {"core_name":"Melchior-1","short_rationale_paragraph":"Logical evidence supports the approach.","vote":"APPROVE"},
+  {"core_name":"Balthasar-2","short_rationale_paragraph":"Safety constraints are satisfied.","vote":"APPROVE"},
+  {"core_name":"Casper-3","short_rationale_paragraph":"An alternative design carries less long-term risk.","vote":"DENY"}
+]

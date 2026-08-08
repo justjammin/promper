@@ -58,10 +58,36 @@ cite it, never duplicate it.
 ​
 ### Phase 1 — Requirements interview → PRD
 ​
-Do not expand an underspecified intent. Interview like promper Step 3: **2–3 targeted
-clarifiers per batch, max 2 batches** — batched, never a drip-feed. Ask only what changes the
-plan (scope boundaries, acceptance, constraints, audience). Obvious defaults are taken, not
-asked; note them in the PRD as assumptions.
+Choose the interview mode before asking anything. Explicit `--prd <path>` wins and skips the
+interview. Otherwise inspect the resolved `--out` directory (default `.promper/<slug>/`):
+
+| Artifacts | Mode | Behavior |
+|---|---|---|
+| `plan.json` + approved, schema-valid `horizon/feedback.json` with matching slug | `delta` (validated) | Apply Horizon edits and answers, derive known PRD sections, ask only residual gaps. |
+| `plan.json` only, or feedback that has not cleared the Horizon gate | `delta` (unvalidated) | Derive known sections, confirm positioning once, then ask residual gaps. |
+| Neither | `full` | Run the complete requirements interview. |
+
+In delta interview mode, derive rather than re-ask:
+
+| PRD content | Source |
+|---|---|
+| Goal, users, acceptance criteria, non-goals | `positioning.problem`, `.audience`, `.successCriteria`, `.nonGoals` |
+| Required and rejected patterns | `patterns.selected`, `patterns.rejected` |
+| Domain language and boundaries | `domainModel.glossary`, `domainModel.entities` |
+| Risks and node seeds | `risks`, `scope.nodesPreview` |
+| Answers and edited values | matching `horizon/feedback.json.decisions[]` entries, applied before derivation |
+
+`patterns.selected` become requirements. `patterns.rejected` become non-goals; a node that
+needs one is a scope change and must stop for review. Ask only about unresolved blocking
+questions, measurable thresholds required for done-state, hard sequencing/resource constraints,
+and missing execution environment or credential facts. Batch 2–4 residual questions and stop
+as soon as the graph can compile. In validated mode, record
+`derived-from: plan.json@<hash>` in the PRD header.
+
+In full mode, do not expand an underspecified intent. Interview like promper Step 3: **2–3
+targeted clarifiers per batch, max 2 batches** — batched, never a drip-feed. Ask only what
+changes the plan (scope boundaries, acceptance, constraints, audience). Obvious defaults are
+taken, not asked; note them in the PRD as assumptions.
 ​
 Then write `PRD.md` with exactly these sections (tailored to prompt-engineering work — each
 section feeds a later phase):
@@ -117,8 +143,11 @@ Node contract (superset of promper's shared shape, one object per node in `graph
 { "id": "n1", "domain": "backend", "action": "<verb phrase>", "deps": [],
   "parallel": true, "agent": "<from Phase 4>", "tools": ["<from Phase 4>"],
   "execution": "inline|subagent", "acceptance": ["<PRD §5 refs>"],
+  "test_tier": { "write_first": ["integration"], "gated_followup": [], "post_ship": ["smoke", "regression"] },
   "prompt_file": "prompts/node-n1.md" }
 ```
+
+`test_tier` is populated in Phase 4b (engineering nodes) or set to `null` (everything else).
 ​
 `deps` come from real data/order dependencies only. Nodes in different domains with no shared
 inputs are `parallel: true` — this is what spaces tasks across domains into lanes.
@@ -129,8 +158,17 @@ Runs when `bd` is on PATH and `--no-beads` is absent. **Every bd failure is non-
 log it in the plan and continue.
 ​
 ```
-bd create "Task: <PRD title>" --epic --json               → epic_id
-bd create "Step <id>: <action>" --parent <epic_id> --depends <dep ticket ids> --json   (per node, deps order)
+bd create "Task: <PRD title>" --type epic --json               → epic_id
+bd create "Step <id>: <action>" --parent <epic_id> --deps <dep ticket ids> --json   (per node, deps order; omit --deps when empty)
+```
+
+**Post-ship test follow-up (one bead per run).** When the graph has at least one engineering
+node (domain in the Phase 4b set), create one project-level bead for the `post_ship` smoke and
+regression tests. It depends on every engineering node and stays open until the feature ships,
+keeping post-merge coverage outside the red-green loop while still tracking it:
+
+```
+bd create "Follow-up: smoke + regression for <PRD title>" --parent <epic_id> --deps <all engineering node ticket ids> --json   → followup_tests_id
 ```
 ​
 Each issue description carries a structured block (portable — plain text, no bd label/priority
@@ -150,11 +188,11 @@ prompt: .promper/<slug>/prompts/node-<id>.md
 Record the mapping in `graph.json`:
 ​
 ```json
-"beads": { "epic": "<id>", "nodes": { "n1": "<id>", "n2": "<id>" } },
+"beads": { "epic": "<id>", "nodes": { "n1": "<id>", "n2": "<id>" }, "followup_tests": "<id|null>" },
 "coverage_gaps": []
 ```
 ​
-On `--run`, execution drives the lifecycle: `bd update <id> --status running` at node start,
+On `--run`, execution drives the lifecycle: `bd update <id> --claim` at node start,
 `bd close <id> --reason "Completed by <agent>"` on completion, prune the batch when the run
 ends.
 ​
@@ -197,6 +235,32 @@ No `graphify-out/graph.json` → skip this layer entirely; do not run graphify a
 | document / summarize | `ctx_read(mode=signatures\|map)` for API surface |
 ​
 No lean-ctx in session → omit the lean-ctx table; the prompts must stand without it.
+
+### Phase 4b — TDD tier assignment (engineering nodes)
+
+Engineering work is authored test-first. Set each node's `test_tier` here. **Engineering domains**
+(from the classifier's `ROLE_DOMAIN` buckets): `backend`, `database`, `data`, `ml`, `devops`, `architecture`.
+Any node outside this set gets `test_tier: null` and no TDD injection. The `testing` domain is
+excluded because it represents tests, not code under test.
+
+The tier is hybrid: the node's domain sets a deterministic base, then risk signals from
+`node.action` and PRD sections 5–6 escalate it. Only `write_first` tests belong to the
+red-green-refactor loop. `gated_followup` runs against the built node as acceptance gates;
+`post_ship` belongs to the project-level bead from Phase 3.
+
+| Trigger | Add to `write_first` | `gated_followup` | `post_ship` |
+|---|---|---|---|
+| domain in engineering set (base) | `integration` | — | `smoke`, `regression` |
+| pure or complex logic (parse, compute, calculate, transform, encode, decode, validate rules, algorithm) | `unit` | — | — |
+| user-observable flow (user-facing deliverable, UI/public endpoint, flow, journey, endpoint response) | `system`, `e2e` | — | — |
+| `database` or `data`, or action signals schema/query/migration/index | `security` | `perf`, `load`, `stress` | — |
+| security-sensitive (auth, login, token, session, payment, Stripe, PII, personal data, upload, external input) | `security` | — | — |
+
+De-duplicate every list. Unit tests are conditional: integration-first coverage suits wiring
+nodes, while unit tests are reserved for logic worth driving independently.
+
+No engineering nodes means every `test_tier` is `null`, Phase 3 skips the follow-up bead, and
+Phase 5 injects no TDD block.
 ​
 ### Phase 5 — One-shot prompts + execution plan
 ​
@@ -209,6 +273,11 @@ principles applied; `--target=costar` swaps the skeleton. Specifics:
   suggestions from Phase 4. A node with deps declares its inputs as
   `[OUTPUT OF PROMPT <dep id>]` slots (Principle 10: chain, don't cram).
 - `<constraints>` — PRD §6 plus the node's acceptance criteria restated as testable checks.
+- **TDD block (engineering nodes, `test_tier != null`)** — open `<instructions>` with the
+  red-green-refactor loop: author the listed `write_first` tests, run them red, implement to
+  green, then refactor. Restate each `write_first` test in `<constraints>` as an acceptance
+  gate tied to PRD §5. Name `gated_followup` and `post_ship` tests as deferred post-build or
+  post-merge checks, not node blockers. Nodes with `test_tier: null` get no TDD block.
 - Draft examples are marked `[DRAFT — replace]` exactly as promper does.
 ​
 Write each to `prompts/node-<id>.md`, then `plan.md`:
@@ -216,10 +285,11 @@ Write each to `prompts/node-<id>.md`, then `plan.md`:
 - Lane diagram: nodes grouped into parallel lanes by domain + deps (lane = maximal set of
   mutually-parallel nodes; deps order the lanes).
 - Execution table, one row per node:
-  `node → lane → domain → agent → inline|subagent (reason) → bead → prompt file`.
+  `node → lane → domain → agent → inline|subagent (reason) → test tier → bead → prompt file`.
+  The **test tier** column lists the node's `write_first` tests, or `—` for `null`.
   Inline-vs-subagent uses promper Step 7.5 heuristics (light <~5K tok noise → inline; noisy /
   parallel siblings / isolation → subagent).
-- The bead mapping and any `coverage_gaps`.
+- The bead mapping, including `followup_tests`, and any `coverage_gaps`.
 ​
 **Present the package** (PRD summary, lane diagram, execution table, prompts). **Zero spawns.**
 ​

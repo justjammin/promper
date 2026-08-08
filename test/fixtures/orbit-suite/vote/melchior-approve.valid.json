@@ -1,0 +1,5 @@
+{
+  "core_name": "Melchior-1",
+  "short_rationale_paragraph": "Token-bucket in Redis is the resource-optimal path: shared state across instances, O(1) checks, and no new infrastructure since Redis already exists. Structural preservation and tactical efficiency both favor approval.",
+  "vote": "APPROVE"
+}

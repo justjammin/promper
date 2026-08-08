@@ -1,0 +1,552 @@
+<!doctype html>
+<!--
+  promper:orbit — retro satellite tracker (1980s CRT scope, WebGL).
+  Visualizes orbit run STATE ONLY: phase status + MAGI tribunal state (deciding / decided /
+  consensus). Never shows decision content (no votes, no rationale, no plan text, no vote counts).
+  Feed: GET /api/status (status.schema.json). Falls back to an embedded demo; DEMO plays a
+  scripted run. Three.js radar + bloom/CRT post + GSAP cinematics. Light = cream, Dark = navy.
+  Fonts: Orbitron (display) + Share Tech Mono (readouts) + Noto Sans JP (MAGI kanji).
+-->
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ORBIT · SATELLITE TRACKER</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800&family=Share+Tech+Mono&family=Noto+Sans+JP:wght@700;900&display=swap" rel="stylesheet" />
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+    "gsap": "https://cdn.jsdelivr.net/npm/gsap@3.12.5/+esm"
+  }
+}
+</script>
+<style>
+  :root {
+    --red:#ff5a45; --amber:#ffc247; --green:#56d16a;
+    --font-head:'Orbitron', system-ui, sans-serif;
+    --font-mono:'Share Tech Mono', ui-monospace, monospace;
+    --font-jp:'Noto Sans JP', system-ui, sans-serif;
+    --space-sm:8px; --space-md:12px; --space-lg:16px; --space-xl:24px;
+  }
+  html[data-theme="dark"] {
+    --bg:#070f20; --bg2:#0a1830; --panel:#0b1d38; --ink:#eae3cd; --dim:#4a5e80;
+    --grid:#173c68; --scope:#081a34; --line:#1f4f88; --shadow:rgba(0,0,0,.6);
+  }
+  html[data-theme="light"] {
+    --red:#c8371f; --amber:#b9791a; --green:#2f8a3d;
+    --bg:#efe6cf; --bg2:#e7ddc2; --panel:#f3ecda; --ink:#282720; --dim:#9c9075;
+    --grid:#cabd99; --scope:#e6dcbe; --line:#b6a67c; --shadow:rgba(120,105,70,.28);
+  }
+  * { box-sizing:border-box; min-width:0; }
+  html,body { height:100%; }
+  body {
+    margin:0; background:radial-gradient(130% 100% at 50% -10%, var(--bg2), var(--bg) 72%);
+    color:var(--ink); font-family:var(--font-mono); font-variant-numeric:tabular-nums;
+    letter-spacing:.02em; overflow:hidden;
+  }
+  header {
+    display:flex; align-items:center; gap:var(--space-lg); padding:.7rem 1.1rem;
+    border-bottom:1px solid var(--line);
+  }
+  header h1 { font-family:var(--font-head); font-weight:800; font-size:1.05rem; margin:0; letter-spacing:.32em; }
+  header .sub { color:var(--dim); font-size:.68rem; letter-spacing:.26em; }
+  .spacer{flex:1}
+  .clock { font-family:var(--font-head); font-weight:600; letter-spacing:.16em; }
+  button {
+    font-family:var(--font-mono); background:transparent; color:var(--ink);
+    border:1px solid var(--line); border-radius:4px; padding:.35rem .75rem; cursor:pointer; letter-spacing:.14em;
+    transition:border-color .2s, color .2s;
+  }
+  button:hover{ border-color:var(--green); color:var(--green); }
+  main { display:grid; grid-template-columns:minmax(0,1.5fr) minmax(300px,1fr); gap:var(--space-lg);
+         padding:var(--space-lg); height:calc(100vh - 52px); }
+  @media (max-width:900px){ main{ grid-template-columns:1fr; height:auto; overflow:auto; } }
+
+  /* ---- scope (WebGL canvas + graticule + labels + CRT frame) ---- */
+  .scope-wrap { position:relative; border:1px solid var(--line); border-radius:12px; overflow:hidden;
+    background:radial-gradient(closest-side, var(--scope), var(--panel));
+    box-shadow:inset 0 0 80px var(--shadow), 0 0 0 6px color-mix(in oklab, var(--panel), transparent 40%);
+    aspect-ratio:1/1; max-height:100%; margin:0 auto; width:100%; }
+  #gl { position:absolute; inset:0; width:100%; height:100%; display:block; }
+  #fallback { position:absolute; inset:0; display:none; place-items:center; text-align:center;
+    color:var(--dim); font-size:.8rem; letter-spacing:.14em; padding:2rem; }
+  .labels { position:absolute; inset:0; pointer-events:none; }
+  .blip-label { position:absolute; transform:translate(-50%,-50%); text-align:center; white-space:nowrap;
+    font-family:var(--font-head); font-weight:600; font-size:.62rem; letter-spacing:.16em; }
+  .blip-label .st { display:block; font-family:var(--font-mono); font-size:.56rem; letter-spacing:.1em; color:var(--dim); }
+  .scan { position:absolute; inset:0; pointer-events:none; mix-blend-mode:overlay;
+    background:repeating-linear-gradient(0deg, rgba(255,255,255,.04) 0 1px, transparent 1px 3px); }
+  .power { position:absolute; inset:0; background:var(--bg); pointer-events:none; }
+
+  /* ---- readout panels ---- */
+  aside { display:flex; flex-direction:column; gap:var(--space-lg); min-height:0; overflow:auto; }
+  .panel { border:1px solid var(--line); border-radius:12px; background:var(--panel);
+           padding:.9rem 1rem; box-shadow:inset 0 0 50px var(--shadow); }
+  .panel h2 { font-family:var(--font-head); font-weight:600; font-size:.72rem; letter-spacing:.24em;
+              margin:0 0 .7rem; display:flex; align-items:center; gap:.5rem; }
+  .kv { display:flex; justify-content:space-between; gap:1rem; font-size:.76rem; padding:.2rem 0; border-bottom:1px dotted var(--line); }
+  .kv .k{ color:var(--dim); letter-spacing:.12em } .kv .v{ letter-spacing:.06em }
+  .phase-row { display:flex; align-items:center; gap:.7rem; padding:.45rem 0; border-bottom:1px dotted var(--line); }
+  .phase-row:last-child{ border-bottom:0; }
+  .lamp { width:11px; height:11px; border-radius:50%; flex:0 0 auto; background:var(--dim); }
+  .lamp.amber{ background:var(--amber); box-shadow:0 0 10px var(--amber); animation:blink .8s steps(2,end) infinite; }
+  .lamp.green{ background:var(--green); box-shadow:0 0 10px var(--green); }
+  .lamp.red{ background:var(--red); box-shadow:0 0 10px var(--red); animation:blink .8s steps(2,end) infinite; }
+  @keyframes blink { 50%{ opacity:.25 } }
+  .phase-row .name{ font-family:var(--font-head); font-weight:600; font-size:.74rem; letter-spacing:.14em; flex:1; }
+  .phase-row .stat{ color:var(--dim); font-size:.66rem; letter-spacing:.12em; }
+  footer{ position:fixed; left:0; right:0; bottom:0; padding:.4rem 1.1rem; color:var(--dim); font-size:.62rem;
+          letter-spacing:.16em; display:flex; gap:1.2rem; flex-wrap:wrap; align-items:center;
+          border-top:1px solid var(--line); background:color-mix(in oklab, var(--bg), transparent 15%); }
+  .legend{ display:flex; gap:1rem; flex-wrap:wrap; }
+  .legend span{ display:inline-flex; align-items:center; gap:.35rem; }
+
+  /* ---- MAGI EVA red-alert overlay ---- */
+  .magi-eva { position:absolute; inset:0; display:none; place-items:center; z-index:5;
+    background:radial-gradient(120% 120% at 50% 50%, rgba(20,0,0,.86), rgba(0,0,0,.96));
+    font-family:var(--font-jp); }
+  .magi-eva.on { display:grid; }
+  .magi-eva::before { content:""; position:absolute; inset:0; pointer-events:none;
+    background:repeating-linear-gradient(0deg, rgba(255,60,40,.05) 0 2px, transparent 2px 5px); }
+  .triad { position:relative; width:min(86%,520px); aspect-ratio:1/1; }
+  .arc { position:absolute; inset:0; margin:auto; border:2px solid var(--red); border-radius:50%; opacity:.5; }
+  .arc.a1{ width:96%; height:96% } .arc.a2{ width:74%; height:74% } .arc.a3{ width:52%; height:52% }
+  .seg { position:absolute; left:50%; top:50%; width:26%; height:40%; background:#0a0a0a;
+    border:2px solid var(--red); color:var(--amber); display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:.25rem; transform-origin:center;
+    box-shadow:0 0 24px rgba(255,60,40,.35); }
+  .seg .num{ font-family:var(--font-head); font-weight:800; font-size:1.6rem; color:#fff; line-height:1; }
+  .seg .nm{ font-family:var(--font-head); font-weight:600; font-size:.6rem; letter-spacing:.18em; color:var(--amber); }
+  .seg .jp{ font-weight:900; font-size:1.15rem; padding:.05rem .4rem; border:2px solid var(--red); color:var(--red);
+    background:#000; letter-spacing:.05em; }
+  .seg .jp.decided{ color:var(--green); border-color:var(--green); }
+  .seg.deciding .jp{ animation:evablink .5s steps(2,end) infinite; }
+  @keyframes evablink { 50%{ opacity:.15 } }
+  /* three segments around the center */
+  .seg.s1{ transform:translate(-50%,-118%); }
+  .seg.s2{ transform:translate(-132%,20%) rotate(0deg); }
+  .seg.s3{ transform:translate(32%,20%); }
+  .center-plate { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    text-align:center; z-index:2; }
+  .center-plate .title{ font-weight:900; font-size:1.5rem; letter-spacing:.1em; color:var(--amber);
+    background:#000; border:2px solid var(--amber); padding:.15rem .7rem; }
+  .center-plate .verdict{ margin-top:.5rem; font-weight:900; font-size:2.2rem; letter-spacing:.12em;
+    color:var(--red); border:3px solid var(--red); background:#000; padding:.1rem .8rem; display:inline-block;
+    animation:evablink .5s steps(2,end) infinite; }
+  .center-plate .verdict .en{ display:block; font-family:var(--font-head); font-size:.7rem; letter-spacing:.4em; margin-top:.15rem; }
+  .center-plate.locked .verdict{ color:var(--green); border-color:var(--green); animation:none; }
+  .center-plate .code{ margin-top:.5rem; font-family:var(--font-mono); font-size:.66rem; letter-spacing:.16em; color:var(--amber); }
+</style>
+</head>
+<body>
+  <header>
+    <h1>ORBIT</h1><span class="sub">SATELLITE TRACKER · MAGI</span>
+    <span class="spacer"></span>
+    <span class="clock" id="clock">T+00:00:00</span>
+    <button id="demo">▶ DEMO</button>
+    <button id="mode">◐ MODE</button>
+  </header>
+
+  <main>
+    <div class="scope-wrap">
+      <canvas id="gl"></canvas>
+      <div id="fallback">WEBGL UNAVAILABLE · STATE SHOWN IN READOUT →</div>
+      <div class="labels" id="labels"></div>
+      <div class="scan"></div>
+      <div class="power" id="power"></div>
+
+      <!-- MAGI EVA red-alert deliberation overlay -->
+      <div class="magi-eva" id="magi-eva">
+        <div class="triad">
+          <div class="arc a1"></div><div class="arc a2"></div><div class="arc a3"></div>
+          <div class="seg s1 deciding" id="seg-0">
+            <div class="jp">エラー</div><div class="num">1</div><div class="nm">MELCHIOR</div>
+          </div>
+          <div class="seg s2 deciding" id="seg-1">
+            <div class="jp">エラー</div><div class="num">2</div><div class="nm">BALTHASAR</div>
+          </div>
+          <div class="seg s3 deciding" id="seg-2">
+            <div class="jp">エラー</div><div class="num">3</div><div class="nm">CASPER</div>
+          </div>
+          <div class="center-plate" id="center-plate">
+            <div class="title">提訴決議</div>
+            <div class="verdict"><span id="verdict-jp">エラー</span><span class="en" id="verdict-en">ERROR</span></div>
+            <div class="code" id="magi-code">DELIBERATING · 0/3</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <aside>
+      <div class="panel">
+        <h2>MISSION</h2>
+        <div class="kv"><span class="k">SLUG</span><span class="v" id="m-slug">—</span></div>
+        <div class="kv"><span class="k">ENGINE</span><span class="v" id="m-engine">—</span></div>
+        <div class="kv"><span class="k">TRIBUNAL</span><span class="v" id="m-tribunal">—</span></div>
+        <div class="kv"><span class="k">ELAPSED</span><span class="v" id="m-elapsed">00:00:00</span></div>
+      </div>
+      <div class="panel">
+        <h2>PHASE TELEMETRY</h2>
+        <div id="phases"></div>
+      </div>
+    </aside>
+  </main>
+
+  <footer>
+    <div class="legend">
+      <span><span class="lamp"></span>PENDING</span>
+      <span><span class="lamp amber"></span>ACTIVE / DECIDING</span>
+      <span><span class="lamp green"></span>DONE / DECIDED</span>
+      <span><span class="lamp red"></span>BLOCKED</span>
+    </div>
+    <span class="spacer"></span>
+    <div>STATE FEED ONLY · NO DECISION CONTENT TRANSMITTED</div>
+  </footer>
+
+<script type="module">
+import * as THREE from "three";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
+import gsap from "gsap";
+
+const PHASES = ["genesis","sideeye","horizon","execute","review"];
+const LABELS = { genesis:"GENESIS", sideeye:"SIDEEYE", horizon:"HORIZON", execute:"EXECUTE", review:"REVIEW" };
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const root = document.documentElement;
+const cssVar = (n) => getComputedStyle(root).getPropertyValue(n).trim();
+const col = (n) => new THREE.Color(cssVar(n));
+
+// ---- state model (demo default; overwritten by /api/status) ----
+let status = {
+  run:{ slug:"rate-limit", intent:"add rate limiting", engine:"breakdown", tribunal:"magi", startedAt:new Date().toISOString() },
+  phases: PHASES.map((id,i)=>({ id, label:LABELS[id], status: i===0?"active":"pending" })),
+  magi:{ active:false, state:"idle", consensusReached:false, cores:[
+    {name:"MELCHIOR-1",state:"deciding"},{name:"BALTHASAR-2",state:"deciding"},{name:"CASPER-3",state:"deciding"} ] }
+};
+
+// ============================ THREE SCENE ============================
+const canvas = document.getElementById("gl");
+const wrap = canvas.parentElement;
+let renderer, scene, camera, composer, bloom, crt, ok = true;
+const R = 140;                              // orbit radius
+const RINGS = [45, 85, 125, 165];
+const blips = [];                           // { group, mesh, glow, label, phase }
+let sweep, cursor, starfield;
+
+try {
+  renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+} catch (e) { ok = false; }
+
+if (ok) {
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(42, 1, 1, 3000);
+  camera.position.set(0, 300, 150);
+  camera.lookAt(0, 0, 0);
+
+  const gridMat = () => new THREE.LineBasicMaterial({ color: col("--grid"), transparent:true, opacity:.75 });
+  const lineMat = () => new THREE.LineBasicMaterial({ color: col("--line"), transparent:true, opacity:.9 });
+
+  // concentric rings (XZ plane)
+  const ringGroup = new THREE.Group(); scene.add(ringGroup);
+  RINGS.forEach((r) => {
+    const pts = []; for (let i=0;i<=128;i++){ const a=i/128*Math.PI*2; pts.push(new THREE.Vector3(Math.cos(a)*r,0,Math.sin(a)*r)); }
+    ringGroup.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), gridMat()));
+  });
+  // crosshair
+  const chair = [ new THREE.Vector3(-175,0,0), new THREE.Vector3(175,0,0), new THREE.Vector3(0,0,-175), new THREE.Vector3(0,0,175) ];
+  const chGeo = new THREE.BufferGeometry().setFromPoints(chair);
+  scene.add(new THREE.LineSegments(chGeo, gridMat()));
+  // bearing ticks
+  const tickPts = []; for (let a=0;a<360;a+=30){ const r=a*Math.PI/180; tickPts.push(new THREE.Vector3(Math.cos(r)*160,0,Math.sin(r)*160), new THREE.Vector3(Math.cos(r)*172,0,Math.sin(r)*172)); }
+  scene.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(tickPts), lineMat()));
+  // orbit path
+  { const pts=[]; for(let i=0;i<=160;i++){const a=i/160*Math.PI*2; pts.push(new THREE.Vector3(Math.cos(a)*R,0,Math.sin(a)*R));}
+    const m=new THREE.LineDashedMaterial({ color:col("--line"), dashSize:6, gapSize:8, transparent:true, opacity:.8 });
+    const l=new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), m); l.computeLineDistances(); scene.add(l); }
+
+  // starfield (distant blips just under the plane -> depth)
+  { const g=new THREE.BufferGeometry(); const N=280; const arr=new Float32Array(N*3);
+    for(let i=0;i<N;i++){ const rr=200+Math.random()*520, a=Math.random()*Math.PI*2;
+      arr[i*3]=Math.cos(a)*rr; arr[i*3+1]=-6-Math.random()*30; arr[i*3+2]=Math.sin(a)*rr; }
+    g.setAttribute("position", new THREE.BufferAttribute(arr,3));
+    starfield=new THREE.Points(g, new THREE.PointsMaterial({ color:col("--dim"), size:2, transparent:true, opacity:.5 }));
+    scene.add(starfield); }
+
+  // glow sprite texture
+  const glowTex = (()=>{ const c=document.createElement("canvas"); c.width=c.height=64; const x=c.getContext("2d");
+    const grd=x.createRadialGradient(32,32,0,32,32,32); grd.addColorStop(0,"rgba(255,255,255,1)");
+    grd.addColorStop(.35,"rgba(255,255,255,.55)"); grd.addColorStop(1,"rgba(255,255,255,0)");
+    x.fillStyle=grd; x.fillRect(0,0,64,64); return new THREE.CanvasTexture(c); })();
+
+  // phase blips
+  const labelsEl = document.getElementById("labels");
+  PHASES.forEach((id,i)=>{
+    const a=(-90 + i*72)*Math.PI/180; const x=Math.cos(a)*R, z=Math.sin(a)*R;
+    const group=new THREE.Group(); group.position.set(x,0,z); scene.add(group);
+    const mesh=new THREE.Mesh(new THREE.SphereGeometry(5,20,20), new THREE.MeshBasicMaterial({ color:col("--dim") }));
+    const glow=new THREE.Sprite(new THREE.SpriteMaterial({ map:glowTex, color:col("--dim"), transparent:true, opacity:.6, depthWrite:false, blending:THREE.AdditiveBlending }));
+    glow.scale.set(34,34,1); group.add(glow, mesh);
+    const label=document.createElement("div"); label.className="blip-label";
+    const labelText=document.createTextNode(LABELS[id]);
+    const labelStatus=document.createElement("span"); labelStatus.className="st"; labelStatus.textContent="—";
+    label.append(labelText,labelStatus); labelsEl.appendChild(label);
+    blips.push({ group, mesh, glow, label, phase:id, blink:null });
+  });
+
+  // rotating radar sweep (wedge fan in XZ)
+  { const seg=26, rad=168, theta=0.55; const pos=[0,0,0]; const cols=[];
+    const cbright=col("--green");
+    for(let i=0;i<=seg;i++){ const a=(i/seg)*theta; pos.push(Math.cos(a)*rad,0,Math.sin(a)*rad); }
+    const g=new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos,3));
+    const idx=[]; for(let i=1;i<seg+1;i++) idx.push(0,i,i+1); g.setIndex(idx);
+    sweep=new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color:cbright, transparent:true, opacity:.16, side:THREE.DoubleSide, depthWrite:false, blending:THREE.AdditiveBlending }));
+    scene.add(sweep); }
+
+  // active-phase cursor (bright ring that hops to the active blip)
+  { const pts=[]; for(let i=0;i<=48;i++){ const a=i/48*Math.PI*2; pts.push(new THREE.Vector3(Math.cos(a)*11,0,Math.sin(a)*11)); }
+    cursor=new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color:col("--amber") }));
+    cursor.position.set(Math.cos(-Math.PI/2)*R,0,Math.sin(-Math.PI/2)*R); scene.add(cursor); }
+
+  // ---- post: bloom + CRT ----
+  composer = new EffectComposer(renderer);
+  composer.addPass(new RenderPass(scene, camera));
+  bloom = new UnrealBloomPass(new THREE.Vector2(1,1), 0.9, 0.7, 0.15);
+  composer.addPass(bloom);
+  crt = new ShaderPass({
+    uniforms:{ tDiffuse:{value:null}, uTime:{value:0}, uRes:{value:new THREE.Vector2(1,1)},
+      uAberr:{value:1.3}, uScan:{value:0.12}, uBarrel:{value:0.14}, uVig:{value:1.15} },
+    vertexShader:"varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }",
+    fragmentShader:[
+      "varying vec2 vUv; uniform sampler2D tDiffuse; uniform float uTime; uniform vec2 uRes;",
+      "uniform float uAberr,uScan,uBarrel,uVig;",
+      "vec2 barrel(vec2 uv){ vec2 c=uv-0.5; float r2=dot(c,c); return uv + c*r2*uBarrel; }",
+      "void main(){ vec2 uv=barrel(vUv);",
+      " if(uv.x<0.0||uv.x>1.0||uv.y<0.0||uv.y>1.0){ gl_FragColor=vec4(0.0,0.0,0.0,1.0); return; }",
+      " vec2 dir=uv-0.5; float ab=uAberr/uRes.x*7.0;",
+      " float r=texture2D(tDiffuse, uv-dir*ab).r;",
+      " float g=texture2D(tDiffuse, uv).g;",
+      " float b=texture2D(tDiffuse, uv+dir*ab).b;",
+      " vec3 cl=vec3(r,g,b);",
+      " float scan=sin(uv.y*uRes.y*1.15)*0.5+0.5; cl*=1.0-uScan*scan;",
+      " cl*=0.965+0.035*sin(uTime*90.0);",
+      " float vig=smoothstep(0.95,0.25,length(dir)*uVig); cl*=mix(0.5,1.0,vig);",
+      " gl_FragColor=vec4(cl,1.0); }"
+    ].join("\n")
+  });
+  composer.addPass(crt);
+
+  resize(); addEventListener("resize", resize);
+}
+
+function resize(){
+  if(!ok) return;
+  const w=wrap.clientWidth, h=wrap.clientHeight;
+  renderer.setSize(w,h,false); composer.setSize(w,h);
+  camera.aspect=w/h; camera.updateProjectionMatrix();
+  crt.uniforms.uRes.value.set(w*Math.min(devicePixelRatio,2), h*Math.min(devicePixelRatio,2));
+  bloom.setSize(w,h);
+}
+
+// project a world position to screen (for HTML labels)
+const _v = new THREE.Vector3();
+function project(obj){
+  _v.copy(obj.position).project(camera);
+  return { x:(_v.x*.5+.5)*wrap.clientWidth, y:(-_v.y*.5+.5)*wrap.clientHeight };
+}
+
+// ---- palette-driven status coloring ----
+const STAT = {
+  pending:{ v:"--dim",  t:"PENDING", glow:.35, blink:false },
+  active :{ v:"--amber",t:"ACTIVE",  glow:1.0, blink:true  },
+  done   :{ v:"--green",t:"DONE",    glow:.8,  blink:false },
+  blocked:{ v:"--red",  t:"BLOCKED", glow:1.0, blink:true  },
+};
+function paintBlip(b, st){
+  const cfg=STAT[st]||STAT.pending; const c=col(cfg.v);
+  b.mesh.material.color.copy(c); b.glow.material.color.copy(c);
+  b.label.style.color=cssVar(cfg.v);
+  b.label.querySelector(".st").textContent=cfg.t;
+  if(b.blink){ b.blink.kill(); b.blink=null; }
+  if(cfg.blink && !reduce){
+    b.glow.material.opacity=1; b.mesh.scale.setScalar(1);
+    b.blink=gsap.to(b.glow.material,{ opacity:.25, duration:.5, yoyo:true, repeat:-1, ease:"power1.inOut" });
+    gsap.to(b.mesh.scale,{ x:1.35,y:1.35,z:1.35, duration:.5, yoyo:true, repeat:-1, ease:"power1.inOut" });
+  } else {
+    gsap.killTweensOf(b.mesh.scale); b.mesh.scale.setScalar(1);
+    b.glow.material.opacity=cfg.glow;
+  }
+}
+
+// ============================ RENDER STATE ============================
+const prev = { phase:{}, consensus:false, magiActive:false, activeIdx:-1 };
+function render(){
+  document.getElementById("m-slug").textContent=status.run.slug||"—";
+  document.getElementById("m-engine").textContent=(status.run.engine||"—").toUpperCase();
+  document.getElementById("m-tribunal").textContent=(status.run.tribunal||"—").toUpperCase();
+
+  // phase telemetry list
+  const map={pending:["","PENDING"],active:["amber","ACTIVE"],done:["green","DONE"],blocked:["red","BLOCKED"]};
+  const phasesElement=document.getElementById("phases");
+  phasesElement.replaceChildren();
+  status.phases.forEach((phase)=>{
+    const [colorClass,statusText]=map[phase.status]||map.pending;
+    const row=document.createElement("div"); row.className="phase-row";
+    const lamp=document.createElement("span"); lamp.className="lamp "+colorClass;
+    const name=document.createElement("span"); name.className="name"; name.textContent=phase.label;
+    const phaseStatus=document.createElement("span"); phaseStatus.className="stat"; phaseStatus.textContent=statusText;
+    row.append(lamp,name,phaseStatus); phasesElement.append(row);
+  });
+
+  // scope blips + phase-change cinematics
+  let activeIdx=-1;
+  status.phases.forEach((p,i)=>{
+    const b=blips[i]; if(!b) return;
+    if(prev.phase[p.id]!==p.status){ paintBlip(b,p.status); prev.phase[p.id]=p.status; }
+    if(p.status==="active"||p.status==="blocked") activeIdx=i;
+  });
+  if(ok && activeIdx>=0 && activeIdx!==prev.activeIdx){
+    const b=blips[activeIdx];
+    if(cursor){ cursor.material.color.copy(col(status.phases[activeIdx].status==="blocked"?"--red":"--amber"));
+      if(reduce){ cursor.position.copy(b.group.position); }
+      else gsap.to(cursor.position,{ x:b.group.position.x, z:b.group.position.z, duration:.7, ease:"power3.inOut" }); }
+    if(!reduce){ gsap.fromTo(camera.position,{},{ duration:.5, ease:"power2.out",
+      onStart(){ camera.position.y-=14; }, onUpdate(){ camera.lookAt(0,0,0); } });
+      gsap.to(camera.position,{ y:300, duration:.9, ease:"elastic.out(1,0.6)", onUpdate(){ camera.lookAt(0,0,0); } }); }
+    prev.activeIdx=activeIdx;
+  }
+
+  // MAGI overlay
+  updateMagi();
+}
+
+// ---- MAGI EVA overlay ----
+const evaEl=document.getElementById("magi-eva");
+function updateMagi(){
+  const on = status.run.tribunal==="magi" && status.magi.active;
+  if(on && !prev.magiActive && !reduce){
+    evaEl.classList.add("on");
+    gsap.fromTo(evaEl,{ opacity:0 },{ opacity:1, duration:.35 });
+    gsap.fromTo(".seg",{ scale:.4, opacity:0 },{ scale:1, opacity:1, duration:.5, stagger:.08, ease:"back.out(1.7)" });
+  } else if(on){ evaEl.classList.add("on"); }
+  else { evaEl.classList.remove("on"); prev.magiActive=false; }
+  if(!on) return;
+  prev.magiActive=true;
+
+  let decided=0;
+  status.magi.cores.forEach((core,i)=>{
+    const seg=document.getElementById("seg-"+i); if(!seg) return;
+    const jp=seg.querySelector(".jp");
+    if(core.state==="decided"){ decided++; seg.classList.remove("deciding");
+      jp.textContent="決定"; jp.classList.add("decided"); }
+    else { seg.classList.add("deciding"); jp.textContent="エラー"; jp.classList.remove("decided"); }
+  });
+
+  const plate=document.getElementById("center-plate");
+  document.getElementById("magi-code").textContent = status.magi.consensusReached
+    ? "CONSENSUS · "+decided+"/3" : "DELIBERATING · "+decided+"/3";
+  if(status.magi.consensusReached){
+    plate.classList.add("locked");
+    document.getElementById("verdict-jp").textContent="合意";
+    document.getElementById("verdict-en").textContent="CONSENSUS";
+    if(!prev.consensus){ prev.consensus=true; consensusBurst(); }
+  } else {
+    plate.classList.remove("locked");
+    document.getElementById("verdict-jp").textContent="エラー";
+    document.getElementById("verdict-en").textContent="ERROR";
+    prev.consensus=false;
+  }
+}
+
+// ---- consensus bloom burst: spike bloom, punch camera, dissolve overlay ----
+function consensusBurst(){
+  if(!ok || reduce){ setTimeout(()=>evaEl.classList.remove("on"), 900); return; }
+  const tl=gsap.timeline();
+  tl.to(bloom,{ strength:2.4, duration:.25, ease:"power2.out" })
+    .to(camera.position,{ y:262, duration:.25, ease:"power2.out", onUpdate(){camera.lookAt(0,0,0);} }, "<")
+    .to({}, { duration:.7 })
+    .to(evaEl,{ opacity:0, duration:.5, ease:"power2.in", onComplete(){ evaEl.classList.remove("on"); evaEl.style.opacity=""; } })
+    .to(bloom,{ strength:0.9, duration:.8, ease:"power2.inOut" }, "<")
+    .to(camera.position,{ y:300, duration:.9, ease:"elastic.out(1,0.6)", onUpdate(){camera.lookAt(0,0,0);} }, "<");
+}
+
+// ============================ LOOP ============================
+const clock=new THREE.Clock();
+function loop(){
+  requestAnimationFrame(loop);
+  if(!ok) return;
+  const dt=clock.getDelta(), t=clock.elapsedTime;
+  if(!reduce){ if(sweep) sweep.rotation.y-=dt*1.4; if(starfield) starfield.rotation.y+=dt*0.02; }
+  crt.uniforms.uTime.value=t;
+  // update HTML labels
+  for(const b of blips){ const s=project(b.group); b.label.style.left=s.x+"px"; b.label.style.top=(s.y-26)+"px"; }
+  composer.render();
+}
+
+// ---- boot power-on ----
+function boot(){
+  if(!ok){ document.getElementById("fallback").style.display="grid"; canvas.style.display="none"; return; }
+  loop();
+  const power=document.getElementById("power");
+  if(reduce){ power.style.display="none"; return; }
+  const tl=gsap.timeline();
+  tl.set(power,{ background:cssVar("--ink") })
+    .to(power,{ opacity:0, duration:.8, ease:"power2.inOut", delay:.15 })
+    .fromTo(".labels .blip-label",{ opacity:0 },{ opacity:1, duration:.5, stagger:.06 }, "-=.3")
+    .fromTo(camera.position,{ y:640 },{ y:300, duration:1.1, ease:"power3.out", onUpdate(){camera.lookAt(0,0,0);} }, 0);
+}
+
+// ---- clock ----
+const t0=Date.now();
+const fmt=(ms)=>{const s=Math.floor(ms/1000);return [s/3600,s/60%60,s%60].map(n=>String(Math.floor(n)).padStart(2,"0")).join(":");};
+setInterval(()=>{const e=fmt(Date.now()-t0);document.getElementById("clock").textContent="T+"+e;document.getElementById("m-elapsed").textContent=e;},1000);
+
+// ---- controls ----
+document.getElementById("mode").onclick=()=>{
+  root.dataset.theme = root.dataset.theme==="dark" ? "light" : "dark";
+  if(ok){ // repaint palette-driven objects
+    scene.traverse(o=>{ if(o.material && o.material.isLineBasicMaterial){ /* rings/ticks keep grid/line via re-set below */ } });
+    starfield.material.color.copy(col("--dim"));
+    status.phases.forEach((p,i)=> paintBlip(blips[i], p.status));
+    if(cursor) cursor.material.color.copy(col("--amber"));
+    if(sweep) sweep.material.color.copy(col("--green"));
+  }
+};
+document.getElementById("demo").onclick=()=>playDemo();
+
+// ---- feed ----
+async function poll(){
+  try{ const r=await fetch("/api/status",{cache:"no-store"}); if(r.ok){ status=await r.json(); render(); } }catch(_){}
+}
+
+// ---- init ----
+boot(); render(); poll(); setInterval(poll, 1500);
+
+// ============================ SCRIPTED DEMO ============================
+const setP=(id,s)=>{ const p=status.phases.find(x=>x.id===id); if(p) p.status=s; };
+async function playDemo(){
+  const wait=ms=>new Promise(r=>setTimeout(r,ms));
+  prev.consensus=false; prev.magiActive=false; prev.activeIdx=-1; prev.phase={};
+  status.run.tribunal="magi";
+  status.magi.active=false; status.magi.state="idle"; status.magi.consensusReached=false;
+  status.magi.cores.forEach(c=>c.state="deciding");
+  PHASES.forEach((p,i)=>setP(p,i===0?"active":"pending")); render();
+  await wait(1100); setP("genesis","done"); setP("sideeye","active"); render();
+  await wait(800);  status.magi.active=true; status.magi.state="deciding"; render();
+  await wait(1400); status.magi.cores[0].state="decided"; render();
+  await wait(900);  status.magi.cores[1].state="decided"; render();
+  await wait(1100); status.magi.cores[2].state="decided"; status.magi.state="decided"; status.magi.consensusReached=true; render();
+  await wait(2200); setP("sideeye","done"); setP("horizon","active"); render();
+  await wait(1300); setP("horizon","done"); setP("execute","active"); render();
+  await wait(1600); setP("execute","done"); setP("review","active"); render();
+  await wait(1300); setP("review","done"); render();
+}
+</script>
+</body>
+</html>

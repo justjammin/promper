@@ -1,0 +1,5 @@
+{
+  "core_name": "Balthasar-2",
+  "short_rationale_paragraph": "Fail-open on a Redis outage silently removes all protection during the exact window an abusive caller is most likely to strike, endangering availability for every legitimate consumer. Without a documented fail-closed fallback and alerting SLO, the safety posture is unacceptable.",
+  "vote": "DENY"
+}

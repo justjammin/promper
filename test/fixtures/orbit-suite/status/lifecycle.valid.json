@@ -1,0 +1,69 @@
+[
+  {
+    "run": {"slug":"billing-ledger","engine":"singularity","tribunal":"magi"},
+    "phases": [
+      {"id":"genesis","label":"GENESIS","status":"active"},
+      {"id":"sideeye","label":"SIDEEYE","status":"pending"},
+      {"id":"horizon","label":"HORIZON","status":"pending"},
+      {"id":"execute","label":"EXECUTE","status":"pending"},
+      {"id":"review","label":"REVIEW","status":"pending"}
+    ],
+    "magi": {"active":false,"state":"idle","consensusReached":false,"cores":[]}
+  },
+  {
+    "run": {"slug":"billing-ledger","engine":"singularity","tribunal":"magi"},
+    "phases": [
+      {"id":"genesis","label":"GENESIS","status":"done"},
+      {"id":"sideeye","label":"SIDEEYE","status":"active"},
+      {"id":"horizon","label":"HORIZON","status":"pending"},
+      {"id":"execute","label":"EXECUTE","status":"pending"},
+      {"id":"review","label":"REVIEW","status":"pending"}
+    ],
+    "magi": {"active":true,"state":"deciding","consensusReached":false,"cores":[
+      {"name":"MELCHIOR-1","state":"deciding"},
+      {"name":"BALTHASAR-2","state":"deciding"},
+      {"name":"CASPER-3","state":"deciding"}
+    ]}
+  },
+  {
+    "run": {"slug":"billing-ledger","engine":"singularity","tribunal":"magi"},
+    "phases": [
+      {"id":"genesis","label":"GENESIS","status":"done"},
+      {"id":"sideeye","label":"SIDEEYE","status":"active"},
+      {"id":"horizon","label":"HORIZON","status":"pending"},
+      {"id":"execute","label":"EXECUTE","status":"pending"},
+      {"id":"review","label":"REVIEW","status":"pending"}
+    ],
+    "magi": {"active":true,"state":"deciding","consensusReached":false,"cores":[
+      {"name":"MELCHIOR-1","state":"decided"},
+      {"name":"BALTHASAR-2","state":"deciding"},
+      {"name":"CASPER-3","state":"deciding"}
+    ]}
+  },
+  {
+    "run": {"slug":"billing-ledger","engine":"singularity","tribunal":"magi"},
+    "phases": [
+      {"id":"genesis","label":"GENESIS","status":"done"},
+      {"id":"sideeye","label":"SIDEEYE","status":"done"},
+      {"id":"horizon","label":"HORIZON","status":"blocked"},
+      {"id":"execute","label":"EXECUTE","status":"pending"},
+      {"id":"review","label":"REVIEW","status":"pending"}
+    ],
+    "magi": {"active":true,"state":"decided","consensusReached":true,"cores":[
+      {"name":"MELCHIOR-1","state":"decided"},
+      {"name":"BALTHASAR-2","state":"decided"},
+      {"name":"CASPER-3","state":"decided"}
+    ]}
+  },
+  {
+    "run": {"slug":"billing-ledger","engine":"singularity","tribunal":"magi"},
+    "phases": [
+      {"id":"genesis","label":"GENESIS","status":"done"},
+      {"id":"sideeye","label":"SIDEEYE","status":"done"},
+      {"id":"horizon","label":"HORIZON","status":"done"},
+      {"id":"execute","label":"EXECUTE","status":"done"},
+      {"id":"review","label":"REVIEW","status":"done"}
+    ],
+    "magi": {"active":false,"state":"idle","consensusReached":false,"cores":[]}
+  }
+]

@@ -1,0 +1,56 @@
+<!doctype html>
+<!--
+  Horizon template shell. Server mode uses the validated API; exported mode uses an embedded
+  plan and downloads feedback JSON. Drag-drop a plan.json anywhere to re-render.
+  Styling deliberately minimal here — orbit swaps in the target project's design system when
+  the artifact previews a specific product (see DESIGN.md §7 design-source priority).
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Horizon — plan validation</title>
+    <style>
+      :root { color-scheme: light dark; }
+      * { box-sizing: border-box; min-width: 0; }
+      body { margin: 0; font: 15px/1.5 system-ui, sans-serif; }
+      header { position: sticky; top: 0; display: flex; gap: 1rem; align-items: center;
+               padding: .75rem 1.25rem; border-bottom: 1px solid #8884; backdrop-filter: blur(6px); }
+      header h1 { font-size: 1rem; margin: 0; }
+      header .spacer { flex: 1; }
+      main { max-width: 60rem; margin: 0 auto; padding: 1.5rem 1.25rem 6rem; }
+      section { border: 1px solid #8884; border-radius: 10px; padding: 1rem 1.25rem; margin: 1rem 0; }
+      section > h2 { margin: 0 0 .75rem; font-size: 1.05rem; display: flex; align-items: center; gap: .5rem; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { text-align: left; padding: .4rem .5rem; border-bottom: 1px solid #8883; vertical-align: top; word-break: break-word; }
+      textarea, input { width: 100%; font: inherit; padding: .35rem .5rem; border: 1px solid #8886; border-radius: 6px; background: transparent; color: inherit; }
+      .approve-toggle button { padding: .2rem .6rem; border: 1px solid #8886; border-radius: 6px; background: transparent; color: inherit; cursor: pointer; }
+      .approve-toggle button[aria-pressed="true"] { background: #4a90d9; color: #fff; border-color: #4a90d9; }
+      .badge { font-size: .75rem; padding: .1rem .5rem; border-radius: 999px; border: 1px solid #8886; }
+      .P0 { background:#e5484d22; } .P1 { background:#f5a62322; } .P2 { background:#8882; }
+      .drop { outline: 3px dashed #4a90d9; outline-offset: -12px; }
+      footer { position: fixed; bottom: 0; left: 0; right: 0; display: flex; gap: .75rem; justify-content: flex-end;
+               padding: .75rem 1.25rem; border-top: 1px solid #8884; backdrop-filter: blur(6px); }
+      button.primary { background: #4a90d9; color: #fff; border: 0; padding: .5rem 1.1rem; border-radius: 8px; cursor: pointer; }
+      button.ghost { background: transparent; border: 1px solid #8886; padding: .5rem 1.1rem; border-radius: 8px; color: inherit; cursor: pointer; }
+      .mermaid { border: 1px dashed #8886; border-radius: 8px; padding: .5rem; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Horizon</h1>
+      <span id="intent" class="badge"></span>
+      <span class="spacer"></span>
+      <span id="status" class="badge">loading…</span>
+    </header>
+
+    <main id="root"><!-- render.js fills this from the embedded plan or /api/plan --></main>
+
+    <footer>
+      <button class="ghost" id="requestChanges">Request changes</button>
+      <button class="primary" id="approve">Approve &amp; send</button>
+    </footer>
+
+    <script type="module" src="./render.js"></script>
+  </body>
+</html>

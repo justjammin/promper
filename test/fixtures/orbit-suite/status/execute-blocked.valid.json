@@ -1,0 +1,11 @@
+{
+  "run": { "slug": "rate-limit", "intent": "add rate limiting", "engine": "breakdown", "tribunal": "solo", "startedAt": "2026-08-07T10:00:00Z" },
+  "phases": [
+    { "id": "genesis", "label": "GENESIS", "status": "done" },
+    { "id": "sideeye", "label": "SIDEEYE", "status": "done" },
+    { "id": "horizon", "label": "HORIZON", "status": "done" },
+    { "id": "execute", "label": "EXECUTE", "status": "blocked" },
+    { "id": "review", "label": "REVIEW", "status": "pending" }
+  ],
+  "magi": { "active": false, "state": "idle", "consensusReached": false, "cores": [] }
+}

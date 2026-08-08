@@ -1,0 +1,7 @@
+{
+  "run": { "slug": "x", "engine": "breakdown", "tribunal": "solo" },
+  "phases": [
+    { "id": "genesis", "label": "GENESIS", "status": "running" }
+  ],
+  "magi": { "active": false, "state": "idle", "consensusReached": false, "cores": [] }
+}
